@@ -55,28 +55,40 @@ export function createChatRoutes({ ctx, sessions, sseByChannel }: ChatDeps) {
 
     const stream = ctx.agentCenter.askWithSession(message, session, opts)
 
-    // Stream events to SSE clients for this channel as they arrive
+    // Stream events directly on the POST response (reliable, same connection).
+    // Also push to other SSE clients for multi-tab sync (best-effort).
     const channelClients = sseByChannel.get(channelId) ?? new Map()
-    for await (const event of stream) {
-      if (event.type === 'done') continue
-      const data = JSON.stringify({ type: 'stream', event })
-      for (const client of channelClients.values()) {
-        try { client.send(data) } catch { /* disconnected */ }
+
+    return streamSSE(c, async (sseStream) => {
+      for await (const event of stream) {
+        if (event.type === 'done') continue
+        const data = JSON.stringify({ type: 'stream', event })
+
+        // Write to requesting client (reliable)
+        await sseStream.writeSSE({ data })
+
+        // Push to other SSE clients (best-effort, multi-tab)
+        for (const client of channelClients.values()) {
+          try { client.send(data) } catch { /* disconnected */ }
+        }
       }
-    }
 
-    // Stream fully drained — await resolves immediately with cached result
-    const result = await stream
+      // Stream fully drained — await resolves immediately with cached result
+      const result = await stream
 
-    await ctx.eventLog.append('message.sent', {
-      channel: 'web', to: channelId, prompt: message,
-      reply: result.text, durationMs: Date.now() - receivedEntry.ts,
+      await ctx.eventLog.append('message.sent', {
+        channel: 'web', to: channelId, prompt: message,
+        reply: result.text, durationMs: Date.now() - receivedEntry.ts,
+      })
+
+      // Media already persisted by AgentCenter — use pre-built URLs
+      const media = (result.mediaUrls ?? []).map((url: string) => ({ type: 'image', url }))
+
+      // Final event with result
+      await sseStream.writeSSE({
+        data: JSON.stringify({ type: 'done', text: result.text, media }),
+      })
     })
-
-    // Media already persisted by AgentCenter — use pre-built URLs
-    const media = (result.mediaUrls ?? []).map(url => ({ type: 'image', url }))
-
-    return c.json({ text: result.text, media })
   })
 
   app.get('/history', async (c) => {

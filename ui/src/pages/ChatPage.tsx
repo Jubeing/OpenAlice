@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { api, type ToolCall, type StreamingToolCall } from '../api'
+import { chatApi } from '../api/chat'
 import type { ChannelListItem } from '../api/channels'
 import { useSSE } from '../hooks/useSSE'
 import { ChatMessage, ToolCallGroup, ThinkingIndicator, StreamingToolGroup } from '../components/ChatMessage'
@@ -24,9 +25,7 @@ export function ChatPage({ onSSEStatus }: ChatPageProps) {
   const [newMsgCount, setNewMsgCount] = useState(0)
   const [streamText, setStreamText] = useState('')
   const [streamTools, setStreamTools] = useState<StreamingToolCall[]>([])
-  const streamTextRef = useRef('')
-  const streamToolsRef = useRef<StreamingToolCall[]>([])
-  streamToolsRef.current = streamTools
+  const abortRef = useRef<AbortController | null>(null)
 
   // Popover state
   const [popoverOpen, setPopoverOpen] = useState(false)
@@ -106,30 +105,11 @@ export function ChatPage({ onSSEStatus }: ChatPageProps) {
     })
   }, [activeChannel])
 
-  // SSE for the active channel
+  // SSE for push notifications only (heartbeat, cron, multi-tab sync)
   const sseChannel = activeChannel === 'default' ? undefined : activeChannel
   useSSE({
     url: sseChannel ? `/api/chat/events?channel=${encodeURIComponent(sseChannel)}` : '/api/chat/events',
     onMessage: (data) => {
-      // Streaming events (tool_use / tool_result / text) during AI generation
-      if (data.type === 'stream' && data.event) {
-        const ev = data.event
-        if (ev.type === 'tool_use') {
-          setStreamTools((prev) => [...prev, {
-            id: ev.id, name: ev.name, input: ev.input, status: 'running',
-          }])
-        } else if (ev.type === 'tool_result') {
-          setStreamTools((prev) => prev.map((t) =>
-            t.id === ev.tool_use_id ? { ...t, status: 'done' as const, result: ev.content } : t,
-          ))
-        } else if (ev.type === 'text') {
-          streamTextRef.current += ev.text
-          setStreamText(streamTextRef.current)
-        }
-        return
-      }
-
-      // Push notifications (heartbeat, cron, etc.)
       if (data.type === 'message' && data.text) {
         const role = data.kind === 'message' ? 'assistant' : 'notification'
         setMessages((prev) => [
@@ -144,31 +124,55 @@ export function ChatPage({ onSSEStatus }: ChatPageProps) {
     onStatus: activeChannel === 'default' ? onSSEStatus : undefined,
   })
 
-  // Send message
+  // Abort streaming on unmount
+  useEffect(() => {
+    return () => { abortRef.current?.abort() }
+  }, [])
+
+  // Send message — streams events directly from POST response (no SSE dependency)
   const handleSend = useCallback(async (text: string) => {
-    // Clear streaming state from previous round
     setStreamText('')
     setStreamTools([])
-    streamTextRef.current = ''
-
     setMessages((prev) => [...prev, { kind: 'text', role: 'user', text, _id: nextId.current++ }])
     setIsWaiting(true)
 
+    const abort = new AbortController()
+    abortRef.current = abort
+
     try {
       const channel = activeChannelRef.current === 'default' ? undefined : activeChannelRef.current
-      const data = await api.chat.send(text, channel)
+      let finalText = ''
+      let finalMedia: Array<{ type: string; url: string }> | undefined
+      const tools: StreamingToolCall[] = []
+      let streamedText = ''
 
-      // POST returned — persist streaming tool calls, then add final text
-      const tools = streamToolsRef.current
+      for await (const event of chatApi.sendStreaming(text, channel, abort.signal)) {
+        if (event.type === 'stream') {
+          const ev = event.event
+          if (ev.type === 'tool_use') {
+            tools.push({ id: ev.id, name: ev.name, input: ev.input, status: 'running' })
+            setStreamTools([...tools])
+          } else if (ev.type === 'tool_result') {
+            const t = tools.find((tool) => tool.id === ev.tool_use_id)
+            if (t) { t.status = 'done'; t.result = ev.content }
+            setStreamTools([...tools])
+          } else if (ev.type === 'text') {
+            streamedText += ev.text
+            setStreamText(streamedText)
+          }
+        } else if (event.type === 'done') {
+          finalText = event.text
+          finalMedia = event.media?.length ? event.media : undefined
+        }
+      }
+
+      // Stream complete — finalize messages
       setStreamText('')
       setStreamTools([])
-      streamTextRef.current = ''
 
-      if (data.text) {
-        const media = data.media?.length ? data.media : undefined
+      if (finalText) {
         setMessages((prev) => {
           const next = [...prev]
-          // Persist tool calls collected during streaming
           if (tools.length > 0) {
             next.push({
               kind: 'tool_calls',
@@ -180,7 +184,7 @@ export function ChatPage({ onSSEStatus }: ChatPageProps) {
               _id: nextId.current++,
             })
           }
-          next.push({ kind: 'text', role: 'assistant', text: data.text, media, _id: nextId.current++ })
+          next.push({ kind: 'text', role: 'assistant', text: finalText, media: finalMedia, _id: nextId.current++ })
           return next
         })
         if (userScrolledUp.current) {
@@ -188,10 +192,9 @@ export function ChatPage({ onSSEStatus }: ChatPageProps) {
         }
       }
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return
       setStreamText('')
       setStreamTools([])
-      streamTextRef.current = ''
-
       const msg = err instanceof Error ? err.message : 'Unknown error'
       setMessages((prev) => [
         ...prev,
@@ -199,6 +202,7 @@ export function ChatPage({ onSSEStatus }: ChatPageProps) {
       ])
     } finally {
       setIsWaiting(false)
+      abortRef.current = null
     }
   }, [])
 
