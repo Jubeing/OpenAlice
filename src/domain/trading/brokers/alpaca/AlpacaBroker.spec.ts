@@ -143,6 +143,19 @@ describe('computeRealizedPnL', () => {
     // (10.667 - 10.333) * 3 = 1.002
     expect(computeRealizedPnL(fills)).toBe(1)
   })
+
+  it('accumulates many small fills without IEEE 754 drift', () => {
+    const fills: ReturnType<typeof fill>[] = []
+    // 100 buys of 0.01 @ 99.99
+    for (let i = 0; i < 100; i++) {
+      fills.push(fill('AAPL', 'buy', 0.01, 99.99, i))
+    }
+    // 1 sell of 1.0 @ 100.01
+    fills.push(fill('AAPL', 'sell', 1.0, 100.01, 100))
+    // realized = 1.0 * (100.01 - 99.99) = 0.02
+    // With floats this would be 0.020000000000003 or similar
+    expect(computeRealizedPnL(fills)).toBe(0.02)
+  })
 })
 
 // ==================== AlpacaBroker ====================
@@ -260,6 +273,28 @@ describe('AlpacaBroker — placeOrder()', () => {
     const result = await acc.placeOrder(contract, order)
     expect(result.success).toBe(false)
     expect(result.error).toContain('Cannot resolve')
+  })
+})
+
+describe('AlpacaBroker — precision', () => {
+  it('placeOrder sends precise qty (no float corruption)', async () => {
+    const acc = new AlpacaBroker({ apiKey: 'k', secretKey: 's', paper: true })
+    ;(acc as any).client = {
+      createOrder: vi.fn().mockResolvedValue({ id: 'ord-p', status: 'new' }),
+    }
+    const contract = new Contract()
+    contract.aliceId = 'alpaca-AAPL'
+    contract.symbol = 'AAPL'
+    contract.secType = 'STK'
+    contract.exchange = 'NASDAQ'
+    const order = new Order()
+    order.action = 'BUY'
+    order.orderType = 'MKT'
+    order.totalQuantity = new Decimal('10.5')
+
+    await acc.placeOrder(contract, order)
+    const passedQty = (acc as any).client.createOrder.mock.calls[0][0].qty
+    expect(passedQty).toBe(10.5)
   })
 })
 

@@ -546,6 +546,82 @@ describe('CcxtBroker — closePosition', () => {
   })
 })
 
+// ==================== precision + reduceOnly behavior ====================
+
+describe('CcxtBroker — precision', () => {
+  it('placeOrder sends precise quantity (no float corruption)', async () => {
+    const acc = makeAccount()
+    setInitialized(acc, { 'ETH/USDT:USDT': makeSwapMarket('ETH', 'USDT', 'ETH/USDT:USDT') })
+    ;(acc as any).exchange.createOrder = vi.fn().mockResolvedValue({ id: 'ord-1', status: 'open' })
+
+    const contract = new Contract()
+    contract.aliceId = 'bybit-ETH/USDT:USDT'
+    const order = new Order()
+    order.action = 'BUY'
+    order.orderType = 'MKT'
+    order.totalQuantity = new Decimal('0.123456789')
+
+    await acc.placeOrder(contract, order)
+    const amount = (acc as any).exchange.createOrder.mock.calls[0][3]
+    // parseFloat("0.123456789") === 0.123456789 (exact in IEEE 754)
+    expect(amount).toBe(0.123456789)
+  })
+
+  it('getPositions returns precise Decimal quantity from string contracts', async () => {
+    const acc = makeAccount()
+    setInitialized(acc, { 'ETH/USDT:USDT': makeSwapMarket('ETH', 'USDT', 'ETH/USDT:USDT') })
+    ;(acc as any).exchange.fetchPositions = vi.fn().mockResolvedValue([{
+      symbol: 'ETH/USDT:USDT',
+      contracts: '0.51', // string from exchange — must not lose precision
+      contractSize: '1',
+      markPrice: 1920, entryPrice: 1900, unrealizedPnl: 10.2,
+      side: 'long', leverage: 10, initialMargin: 100, liquidationPrice: 0,
+    }])
+
+    const positions = await acc.getPositions()
+    // Must be exactly "0.51", not "0.50999999..."
+    expect(positions[0].quantity.toString()).toBe('0.51')
+  })
+
+  it('getPositions handles fractional contractSize precisely', async () => {
+    const acc = makeAccount()
+    setInitialized(acc, { 'ETH/USDT:USDT': makeSwapMarket('ETH', 'USDT', 'ETH/USDT:USDT') })
+    ;(acc as any).exchange.fetchPositions = vi.fn().mockResolvedValue([{
+      symbol: 'ETH/USDT:USDT',
+      contracts: '51', // 51 contracts × 0.01 contractSize = 0.51
+      contractSize: '0.01',
+      markPrice: 1920, entryPrice: 1900, unrealizedPnl: 10.2,
+      side: 'long', leverage: 10, initialMargin: 100, liquidationPrice: 0,
+    }])
+
+    const positions = await acc.getPositions()
+    expect(positions[0].quantity.toString()).toBe('0.51')
+  })
+})
+
+describe('CcxtBroker — closePosition reduceOnly', () => {
+  it('passes reduceOnly: true to createOrder params', async () => {
+    const acc = makeAccount()
+    const market = makeSwapMarket('ETH', 'USDT', 'ETH/USDT:USDT')
+    setInitialized(acc, { 'ETH/USDT:USDT': market })
+
+    ;(acc as any).exchange.fetchPositions = vi.fn().mockResolvedValue([{
+      symbol: 'ETH/USDT:USDT', contracts: 0.5, contractSize: 1,
+      markPrice: 1920, entryPrice: 1900, unrealizedPnl: 10,
+      side: 'long', leverage: 10, initialMargin: 100, liquidationPrice: 0,
+    }])
+    ;(acc as any).exchange.createOrder = vi.fn().mockResolvedValue({ id: 'close-1', status: 'closed' })
+
+    const contract = new Contract()
+    contract.aliceId = 'bybit-ETH/USDT:USDT'
+    await acc.closePosition(contract)
+
+    // createOrder 6th arg is params
+    const params = (acc as any).exchange.createOrder.mock.calls[0][5]
+    expect(params.reduceOnly).toBe(true)
+  })
+})
+
 // ==================== getAccount ====================
 
 describe('CcxtBroker — getAccount', () => {
