@@ -371,7 +371,7 @@ async function main() {
 
   const ctx: EngineContext = {
     config, connectorCenter, agentCenter, eventLog, toolCallLog, heartbeat, cronEngine, toolCenter,
-    accountManager,
+    accountManager, snapshotService,
     reconnectConnectors,
   }
 

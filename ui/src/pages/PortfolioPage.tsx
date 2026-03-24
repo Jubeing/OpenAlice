@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
-import { api, type Position, type WalletCommitLog } from '../api'
+import { api, type Position, type WalletCommitLog, type EquityCurvePoint, type UTASnapshotSummary } from '../api'
 import { useAccountHealth } from '../hooks/useAccountHealth'
 import { PageHeader } from '../components/PageHeader'
 import { EmptyState } from '../components/StateViews'
+import { EquityCurve } from '../components/EquityCurve'
+import { SnapshotDetail } from '../components/SnapshotDetail'
 
 // ==================== Types ====================
 
@@ -37,11 +39,18 @@ export function PortfolioPage() {
   const [data, setData] = useState<PortfolioData>(EMPTY)
   const [loading, setLoading] = useState(true)
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
+  const [curvePoints, setCurvePoints] = useState<EquityCurvePoint[]>([])
+  const [selectedTimestamp, setSelectedTimestamp] = useState<string | null>(null)
+  const [selectedSnapshot, setSelectedSnapshot] = useState<UTASnapshotSummary | null>(null)
 
   const refresh = useCallback(async () => {
     setLoading(true)
-    const result = await fetchPortfolioData()
+    const [result, curveResult] = await Promise.all([
+      fetchPortfolioData(),
+      api.trading.equityCurve({ limit: 200 }).catch(() => ({ points: [] })),
+    ])
     setData(result)
+    setCurvePoints(curveResult.points)
     setLastRefresh(new Date())
     setLoading(false)
   }, [])
@@ -60,6 +69,23 @@ export function PortfolioPage() {
   const allWalletLogs = data.accounts.flatMap(a =>
     a.walletLog.map(c => ({ ...c, accountLabel: a.label, accountProvider: a.provider })),
   )
+
+  // Build account label map for the chart
+  const accountLabels: Record<string, string> = {}
+  for (const a of data.accounts) accountLabels[a.id] = a.label
+
+  const handlePointClick = useCallback(async (point: EquityCurvePoint) => {
+    setSelectedTimestamp(point.timestamp)
+    // Fetch detailed snapshot from the first account that has data at this time
+    const accountId = Object.keys(point.accounts)[0]
+    if (!accountId) return
+    try {
+      const { snapshots } = await api.trading.snapshots(accountId, { limit: 1 })
+      if (snapshots.length > 0) setSelectedSnapshot(snapshots[0])
+    } catch {
+      // Ignore — snapshot fetch failed
+    }
+  }, [])
 
   // Merge equity per-account data with provider info + per-account unrealizedPnL from positions
   const accountSources = (data.equity?.accounts ?? []).map(eq => {
@@ -89,6 +115,22 @@ export function PortfolioPage() {
       <div className="flex-1 overflow-y-auto px-4 md:px-6 py-5">
         <div className="max-w-[900px] space-y-5">
           <HeroMetrics equity={data.equity} />
+
+          {curvePoints.length > 0 && (
+            <EquityCurve
+              points={curvePoints}
+              accountLabels={accountLabels}
+              onPointClick={handlePointClick}
+              selectedTimestamp={selectedTimestamp}
+            />
+          )}
+
+          {selectedSnapshot && (
+            <SnapshotDetail
+              snapshot={selectedSnapshot}
+              onClose={() => { setSelectedSnapshot(null); setSelectedTimestamp(null) }}
+            />
+          )}
 
           {accountSources.length > 0 && (
             <AccountStrip sources={accountSources} />

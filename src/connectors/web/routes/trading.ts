@@ -164,5 +164,71 @@ export function createTradingRoutes(ctx: EngineContext) {
     }
   })
 
+  // ==================== Snapshot routes ====================
+
+  // Per-account snapshots
+  app.get('/accounts/:id/snapshots', async (c) => {
+    if (!ctx.snapshotService) return c.json({ snapshots: [] })
+    const id = c.req.param('id')
+    const limit = Number(c.req.query('limit')) || 100
+    try {
+      const snapshots = await ctx.snapshotService.getRecent(id, limit)
+      return c.json({ snapshots })
+    } catch {
+      return c.json({ snapshots: [] })
+    }
+  })
+
+  // Aggregated equity curve across all accounts
+  app.get('/snapshots/equity-curve', async (c) => {
+    if (!ctx.snapshotService) return c.json({ points: [] })
+    const limit = Number(c.req.query('limit')) || 200
+
+    try {
+      const accounts = ctx.accountManager.resolve()
+      // Gather snapshots per account
+      const perAccount = await Promise.all(
+        accounts.map(async (uta) => {
+          const snaps = await ctx.snapshotService!.getRecent(uta.id, limit)
+          return { id: uta.id, label: uta.label, snaps }
+        }),
+      )
+
+      // Build time-indexed map: group snapshots by minute-rounded timestamp
+      const timeMap = new Map<string, { equity: number; accounts: Record<string, string> }>()
+
+      for (const { id: accId, snaps } of perAccount) {
+        for (const snap of snaps) {
+          // Round to nearest minute for grouping
+          const d = new Date(snap.timestamp)
+          d.setSeconds(0, 0)
+          const key = d.toISOString()
+
+          let entry = timeMap.get(key)
+          if (!entry) {
+            entry = { equity: 0, accounts: {} }
+            timeMap.set(key, entry)
+          }
+          entry.accounts[accId] = snap.account.netLiquidation
+          // Recalculate total equity from all accounts at this time
+          entry.equity = Object.values(entry.accounts).reduce((s, v) => s + (Number(v) || 0), 0)
+        }
+      }
+
+      // Sort chronologically and format
+      const points = Array.from(timeMap.entries())
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([timestamp, { equity, accounts }]) => ({
+          timestamp,
+          equity: String(equity),
+          accounts,
+        }))
+
+      return c.json({ points })
+    } catch {
+      return c.json({ points: [] })
+    }
+  })
+
   return app
 }
