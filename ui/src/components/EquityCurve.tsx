@@ -19,14 +19,19 @@ const RANGES = [
 
 interface EquityCurveProps {
   points: EquityCurvePoint[]
-  accountLabels: Record<string, string>
+  accounts: Array<{ id: string; label: string }>
+  selectedAccountId: string | 'all'
+  onAccountChange: (id: string | 'all') => void
   onPointClick?: (point: EquityCurvePoint) => void
   selectedTimestamp?: string | null
 }
 
 // ==================== Component ====================
 
-export function EquityCurve({ points, accountLabels, onPointClick, selectedTimestamp }: EquityCurveProps) {
+export function EquityCurve({
+  points, accounts, selectedAccountId, onAccountChange,
+  onPointClick, selectedTimestamp,
+}: EquityCurveProps) {
   const [range, setRange] = useState('24H')
 
   const filtered = useMemo(() => {
@@ -47,8 +52,7 @@ export function EquityCurve({ points, accountLabels, onPointClick, selectedTimes
 
   if (chartData.length === 0) return null
 
-  const accountIds = Object.keys(accountLabels)
-  const showPerAccount = accountIds.length > 1
+  const isAllView = selectedAccountId === 'all'
 
   return (
     <div className="border border-border rounded-lg bg-bg-secondary p-4">
@@ -73,6 +77,35 @@ export function EquityCurve({ points, accountLabels, onPointClick, selectedTimes
           ))}
         </div>
       </div>
+
+      {/* Account switcher */}
+      {accounts.length > 1 && (
+        <div className="flex gap-1 mb-3">
+          {accounts.map(a => (
+            <button
+              key={a.id}
+              onClick={() => onAccountChange(a.id)}
+              className={`px-2.5 py-1 text-[11px] rounded border transition-colors ${
+                selectedAccountId === a.id
+                  ? 'border-accent/40 bg-accent/10 text-accent font-medium'
+                  : 'border-border text-text-muted hover:text-text hover:bg-bg-tertiary'
+              }`}
+            >
+              {a.label}
+            </button>
+          ))}
+          <button
+            onClick={() => onAccountChange('all')}
+            className={`px-2.5 py-1 text-[11px] rounded border transition-colors ${
+              isAllView
+                ? 'border-accent/40 bg-accent/10 text-accent font-medium'
+                : 'border-border text-text-muted hover:text-text hover:bg-bg-tertiary'
+            }`}
+          >
+            All
+          </button>
+        </div>
+      )}
 
       {/* Chart */}
       <ResponsiveContainer width="100%" height={220}>
@@ -108,7 +141,7 @@ export function EquityCurve({ points, accountLabels, onPointClick, selectedTimes
             width={70}
             domain={['auto', 'auto']}
           />
-          <Tooltip content={<CustomTooltip accountLabels={accountLabels} showPerAccount={showPerAccount} />} />
+          <Tooltip content={<CustomTooltip isAllView={isAllView} accounts={accounts} />} />
           <Area
             type="monotone"
             dataKey="equityNum"
@@ -134,9 +167,10 @@ export function EquityCurve({ points, accountLabels, onPointClick, selectedTimes
 
 // ==================== Custom Tooltip ====================
 
-function CustomTooltip({ active, payload, accountLabels, showPerAccount }: any) {
+function CustomTooltip({ active, payload, isAllView, accounts }: any) {
   if (!active || !payload?.[0]) return null
   const data = payload[0].payload as EquityCurvePoint & { time: number }
+  const accountMap = new Map((accounts as Array<{ id: string; label: string }>).map(a => [a.id, a.label]))
 
   return (
     <div className="bg-bg-secondary border border-border rounded-md px-3 py-2 shadow-lg text-[12px]">
@@ -146,11 +180,11 @@ function CustomTooltip({ active, payload, accountLabels, showPerAccount }: any) 
       <p className="text-text font-semibold tabular-nums">
         ${Number(data.equity).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
       </p>
-      {showPerAccount && (
+      {isAllView && data.accounts && Object.keys(data.accounts).length > 1 && (
         <div className="mt-1.5 pt-1.5 border-t border-border space-y-0.5">
           {Object.entries(data.accounts).map(([id, val]) => (
             <div key={id} className="flex justify-between gap-4">
-              <span className="text-text-muted">{accountLabels[id] ?? id}</span>
+              <span className="text-text-muted">{accountMap.get(id) ?? id}</span>
               <span className="text-text tabular-nums">
                 ${Number(val).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
@@ -167,11 +201,9 @@ function CustomTooltip({ active, payload, accountLabels, showPerAccount }: any) 
 function formatTime(ts: number): string {
   const d = new Date(ts)
   const now = new Date()
-  // Same day → just time
   if (d.toDateString() === now.toDateString()) {
     return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
   }
-  // Different day → date + time
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
     ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
 }

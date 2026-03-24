@@ -42,6 +42,7 @@ export function PortfolioPage() {
   const [loading, setLoading] = useState(true)
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
   const [curvePoints, setCurvePoints] = useState<EquityCurvePoint[]>([])
+  const [curveAccountId, setCurveAccountId] = useState<string | 'all'>('') // '' = not yet initialized
   const [selectedTimestamp, setSelectedTimestamp] = useState<string | null>(null)
   const [selectedSnapshot, setSelectedSnapshot] = useState<UTASnapshotSummary | null>(null)
   const [snapshotEnabled, setSnapshotEnabled] = useState(true)
@@ -53,22 +54,44 @@ export function PortfolioPage() {
   }, [])
   const { status: snapshotSaveStatus } = useAutoSave({ data: snapshotConfig, save: saveSnapshotConfig })
 
+  // Fetch curve data for a specific account or all
+  const fetchCurveData = useCallback(async (accountId: string | 'all') => {
+    if (accountId === 'all') {
+      const result = await api.trading.equityCurve({ limit: 200 }).catch(() => ({ points: [] }))
+      return result.points
+    }
+    // Single account — fetch its snapshots and convert to EquityCurvePoint format
+    const { snapshots } = await api.trading.snapshots(accountId, { limit: 200 }).catch(() => ({ snapshots: [] as UTASnapshotSummary[] }))
+    return snapshots
+      .sort((a, b) => a.timestamp.localeCompare(b.timestamp))
+      .map(s => ({
+        timestamp: s.timestamp,
+        equity: s.account.netLiquidation,
+        accounts: { [accountId]: s.account.netLiquidation },
+      }))
+  }, [])
+
   const refresh = useCallback(async () => {
     setLoading(true)
-    const [result, curveResult, configResult] = await Promise.all([
+    const [result, configResult] = await Promise.all([
       fetchPortfolioData(),
-      api.trading.equityCurve({ limit: 200 }).catch(() => ({ points: [] })),
       api.config.load().catch(() => null),
     ])
     setData(result)
-    setCurvePoints(curveResult.points)
     if (configResult?.snapshot) {
       setSnapshotEnabled(configResult.snapshot.enabled)
       setSnapshotEvery(configResult.snapshot.every)
     }
+
+    // Default to first account on initial load
+    const effectiveId = curveAccountId || result.accounts[0]?.id || 'all'
+    if (!curveAccountId && effectiveId) setCurveAccountId(effectiveId)
+    const points = await fetchCurveData(effectiveId)
+    setCurvePoints(points)
+
     setLastRefresh(new Date())
     setLoading(false)
-  }, [])
+  }, [curveAccountId, fetchCurveData])
 
   useEffect(() => { refresh() }, [refresh])
 
@@ -85,14 +108,20 @@ export function PortfolioPage() {
     a.walletLog.map(c => ({ ...c, accountLabel: a.label, accountProvider: a.provider })),
   )
 
-  // Build account label map for the chart
-  const accountLabels: Record<string, string> = {}
-  for (const a of data.accounts) accountLabels[a.id] = a.label
+  // Account list for the chart switcher
+  const chartAccounts = data.accounts.map(a => ({ id: a.id, label: a.label }))
+
+  const handleAccountChange = useCallback(async (id: string | 'all') => {
+    setCurveAccountId(id)
+    setSelectedSnapshot(null)
+    setSelectedTimestamp(null)
+    const points = await fetchCurveData(id)
+    setCurvePoints(points)
+  }, [fetchCurveData])
 
   const handlePointClick = useCallback(async (point: EquityCurvePoint) => {
     setSelectedTimestamp(point.timestamp)
-    // Fetch detailed snapshot from the first account that has data at this time
-    const accountId = Object.keys(point.accounts)[0]
+    const accountId = curveAccountId !== 'all' ? curveAccountId : Object.keys(point.accounts)[0]
     if (!accountId) return
     try {
       const { snapshots } = await api.trading.snapshots(accountId, { limit: 1 })
@@ -100,7 +129,7 @@ export function PortfolioPage() {
     } catch {
       // Ignore — snapshot fetch failed
     }
-  }, [])
+  }, [curveAccountId])
 
   // Merge equity per-account data with provider info + per-account unrealizedPnL from positions
   const accountSources = (data.equity?.accounts ?? []).map(eq => {
@@ -134,7 +163,9 @@ export function PortfolioPage() {
           {curvePoints.length > 0 && (
             <EquityCurve
               points={curvePoints}
-              accountLabels={accountLabels}
+              accounts={chartAccounts}
+              selectedAccountId={curveAccountId}
+              onAccountChange={handleAccountChange}
               onPointClick={handlePointClick}
               selectedTimestamp={selectedTimestamp}
             />
