@@ -17,6 +17,18 @@ import { createModelFromConfig, type ModelOverride } from './model-factory.js'
 import { createAgent } from './agent.js'
 import { createChannel } from '../../core/async-channel.js'
 
+/** Detect MiniMax 'choices: null' API error (TypeValidationError with choices path). */
+function isMiniMaxChoicesNullError(err: unknown): boolean {
+  if (err instanceof Error && 'cause' in err) {
+    const cause = (err as { cause?: unknown }).cause
+    if (cause && typeof cause === 'object' && 'issues' in cause) {
+      const issues = (cause as { issues?: Array<{ path?: string[] }> }).issues ?? []
+      return issues.some((i) => i.path?.join('.') === 'choices')
+    }
+  }
+  return false
+}
+
 export class VercelAIProvider implements AIProvider {
   readonly providerTag = 'vercel-ai' as const
   private cachedKey: string | null = null
@@ -59,15 +71,28 @@ export class VercelAIProvider implements AIProvider {
   async ask(prompt: string): Promise<ProviderResult> {
     const agent = await this.resolveAgent(undefined)
     const media: MediaAttachment[] = []
-    const result = await agent.generate({
-      prompt,
-      onStepFinish: (step) => {
-        for (const tr of step.toolResults) {
-          media.push(...extractMediaFromToolOutput(tr.output))
-        }
-      },
-    })
-    return { text: result.text ?? '', media }
+    try {
+      const result = await agent.generate({
+        prompt,
+        onStepFinish: (step) => {
+          for (const tr of step.toolResults) {
+            media.push(...extractMediaFromToolOutput(tr.output))
+          }
+        },
+      })
+      return { text: result.text ?? '', media }
+    } catch (err) {
+      // MiniMax returns choices:null when it refuses to respond with tools attached.
+      // Fall back to a tool-free agent so the user at least gets a text response.
+      if (isMiniMaxChoicesNullError(err)) {
+        console.warn('vercel-ai: MiniMax returned choices:null with tools attached — retrying without tools')
+        const { model } = await createModelFromConfig()
+        const fallbackAgent = createAgent(model, {}, this.instructions, this.maxSteps)
+        const result = await fallbackAgent.generate({ prompt, onStepFinish: () => {} })
+        return { text: result.text ?? '', media: [] }
+      }
+      throw err
+    }
   }
 
   async *generate(entries: SessionEntry[], _prompt: string, opts?: GenerateOpts): AsyncGenerator<ProviderEvent> {
