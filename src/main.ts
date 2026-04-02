@@ -7,6 +7,7 @@ import { McpPlugin } from './server/mcp.js'
 import { TelegramPlugin } from './connectors/telegram/index.js'
 import { WebPlugin } from './connectors/web/index.js'
 import { McpAskPlugin } from './connectors/mcp-ask/index.js'
+import { McpClientPlugin } from './plugins/mcp-client/index.js'
 import { createThinkingTools } from './tool/thinking.js'
 import { AccountManager, createSnapshotService, createSnapshotScheduler } from './domain/trading/index.js'
 import { createTradingTools } from './tool/trading.js'
@@ -291,6 +292,11 @@ async function main() {
     optionalPlugins.set('openbb-server', new OpenBBServerPlugin({ port: config.marketData.apiServer.port }))
   }
 
+  // MCP Client - connecting to longport
+  corePlugins.push(new McpClientPlugin({
+    'longport': 'http://127.0.0.1:8001'
+  }))
+  
   // ==================== Connector Reconnect ====================
 
   let connectorsReconnecting = false
