@@ -75,6 +75,9 @@ importers:
       json5:
         specifier: ^2.2.3
         version: 2.2.3
+      longbridge:
+        specifier: ^4.0.5
+        version: 4.0.5
       pino:
         specifier: ^10.3.1
         version: 10.3.1
@@ -2206,6 +2209,42 @@ packages:
 
   long@5.3.2:
     resolution: {integrity: sha512-mNAgZ1GmyNhD7AuqnTG3/VQ26o760+ZYBPKjPvugO8+nLbYfX6TVpJPseBvopbdY+qpZ/lKUnmEc1LeZYS3QAA==}
+
+  longbridge-darwin-arm64@4.0.5:
+    resolution: {integrity: sha512-BrKyRrGnEiJPtM4NV5w8s8/Qukadz0rUIk6DRxHs7lkhRKKV7TQYWrYFyENW1eWRxmvgco3oud6WgGvBp1/eoA==}
+    engines: {node: '>= 10'}
+    cpu: [arm64]
+    os: [darwin]
+
+  longbridge-darwin-x64@4.0.5:
+    resolution: {integrity: sha512-A+6vme5yWWcpQbv4Lp5ODiKg8QrZThFMqHqO6vQ0O3Hpsy3SZXnVPLn1HkIcIPiOsEzujahcLCp0VlKhD/JSng==}
+    engines: {node: '>= 10'}
+    cpu: [x64]
+    os: [darwin]
+
+  longbridge-linux-arm64-gnu@4.0.5:
+    resolution: {integrity: sha512-JeUAbHsa/7z5K/WRa5VtZUZGemFFrYRTlpiET9a8XYKzZDLavdpKCeH5nI8fJp4oTIz+Hmve66FhEyqTWrUbuA==}
+    engines: {node: '>= 10'}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  longbridge-linux-x64-gnu@4.0.5:
+    resolution: {integrity: sha512-AYr4FtFix08KtkRFeq4r5Bf8VgUZKUkBbmdpiAwXezn5Ela7vnomnTxLemY8fIROipDpHMztFGPsmSOtTwtMCA==}
+    engines: {node: '>= 10'}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  longbridge-win32-x64-msvc@4.0.5:
+    resolution: {integrity: sha512-+NrleoKFK2uGTAP2XYXt1WajtCdm02MKsUztnFjtSw1zxwbP+54/GvG1W8ucSYPPVA84Xjg/+tARtox56yF8xg==}
+    engines: {node: '>= 10'}
+    cpu: [x64]
+    os: [win32]
+
+  longbridge@4.0.5:
+    resolution: {integrity: sha512-kU4ufLPImseZeibUkTg/tDx0w7uVtCkhJhVdpNhpAwlyOn3unXtz4VqGKXG3lGpuh7jdKx3HejGtAMBvDHEE5A==}
+    engines: {node: '>= 10'}
 
   loupe@3.2.1:
     resolution: {integrity: sha512-CdzqowRJCeLU72bHvWqwRBBlLcMEtIvGrlvef74kMnV2AolS9Y8xUv1I0U/MNAWMhBlKIoyuEgoJ0t/bbwHbLQ==}
@@ -4865,6 +4904,29 @@ snapshots:
   lodash@4.17.23: {}
 
   long@5.3.2: {}
+
+  longbridge-darwin-arm64@4.0.5:
+    optional: true
+
+  longbridge-darwin-x64@4.0.5:
+    optional: true
+
+  longbridge-linux-arm64-gnu@4.0.5:
+    optional: true
+
+  longbridge-linux-x64-gnu@4.0.5:
+    optional: true
+
+  longbridge-win32-x64-msvc@4.0.5:
+    optional: true
+
+  longbridge@4.0.5:
+    optionalDependencies:
+      longbridge-darwin-arm64: 4.0.5
+      longbridge-darwin-x64: 4.0.5
+      longbridge-linux-arm64-gnu: 4.0.5
+      longbridge-linux-x64-gnu: 4.0.5
+      longbridge-win32-x64-msvc: 4.0.5
 
   loupe@3.2.1: {}
 
