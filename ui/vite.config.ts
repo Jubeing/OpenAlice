@@ -8,6 +8,7 @@ export default defineConfig({
   // Use this during development for hot reload. See README for details.
   server: {
     port: 5173,
+    allowedHosts: ['q.ytn.red'],
     proxy: {
       '/api': 'http://localhost:3002',
     },
