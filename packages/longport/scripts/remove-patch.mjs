@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * LongPort broker patch uninstaller for OpenAlice.
+ * Longbridge broker patch uninstaller for OpenAlice.
  *
  * Run from the OpenAlice root directory:
  *   node packages/longport/scripts/remove-patch.mjs
@@ -21,63 +21,59 @@ function writeJson(path, obj) {
   writeFileSync(path, JSON.stringify(obj, null, 2) + '\n')
 }
 
-// ---- 1. Remove longport files from src/ ----
+// ---- 1. Remove longbridge files from src/ ----
 
-const longportDir = resolve(ROOT, 'src/domain/trading/brokers/longport')
-if (existsSync(longportDir)) {
-  rmSync(longportDir, { recursive: true, force: true })
-  console.log('✓ Removed src/domain/trading/brokers/longport/')
+const longbridgeDir = resolve(ROOT, 'src/domain/trading/brokers/longbridge')
+if (existsSync(longbridgeDir)) {
+  rmSync(longbridgeDir, { recursive: true, force: true })
+  console.log('✓ Removed src/domain/trading/brokers/longbridge/')
 }
 
-// ---- 2. Patch registry.ts ----
+// ---- 2. Remove longbridge from registry.ts ----
 
 const registryPath = resolve(ROOT, 'src/domain/trading/brokers/registry.ts')
 if (existsSync(registryPath)) {
   let content = readFileSync(registryPath, 'utf8')
+
+  // Remove import
   content = content.replace(
-    /import \{ LongPortBroker \} from '\.\/longport\/LongPortBroker\.js'\n?/,
+    /import \{ LongbridgeBroker \} from '\.\/longbridge\/LongbridgeBroker\.js'\n?/,
     '',
   )
+
+  // Remove registry entry
   content = content.replace(
-    /\n  longport: \{[\s\S]*?guardCategory: 'securities',\n  \},\n/,
-    '\n',
+    /\n  longbridge: \{[\s\S]*?guardCategory: 'securities',\n  \},\n?/,
+    '',
   )
+
   writeFileSync(registryPath, content)
   console.log('✓ registry.ts cleaned')
 }
 
-// ---- 3. Patch index.ts ----
+// ---- 3. Remove longbridge from index.ts ----
 
 const indexPath = resolve(ROOT, 'src/domain/trading/brokers/index.ts')
 if (existsSync(indexPath)) {
   let content = readFileSync(indexPath, 'utf8')
+
   content = content.replace(
-    /\n\n\/\/ LongPort\nexport \{ LongPortBroker \} from '\.\/longport\/LongPortBroker\.js'\nexport \{ longPortConfigFields \} from '\.\/longport\/LongPortBroker\.js'/,
+    /\n\n\/\/ Longbridge\nexport \{ LongbridgeBroker \} from '\.\/longbridge\/LongbridgeBroker\.js'\nexport \{ longbridgeConfigFields \} from '\.\/longbridge\/LongbridgeBroker\.js'\n?/,
     '',
   )
+
   writeFileSync(indexPath, content)
   console.log('✓ index.ts cleaned')
 }
 
-// ---- 4. Remove longbridge from root package.json ----
+// ---- 4. Remove longbridge from root package.json dependencies ----
 
 const rootPkgPath = resolve(ROOT, 'package.json')
-if (existsSync(rootPkgPath)) {
-  const pkg = readJson(rootPkgPath)
-  delete pkg.dependencies?.longbridge
-  writeJson(rootPkgPath, pkg)
+const rootPkg = readJson(rootPkgPath)
+if (rootPkg.dependencies?.longbridge) {
+  delete rootPkg.dependencies.longbridge
+  writeJson(rootPkgPath, rootPkg)
   console.log('✓ package.json cleaned')
 }
 
-// ---- 5. Remove root tsup.config.ts ----
-
-const tsupPath = resolve(ROOT, 'tsup.config.ts')
-if (existsSync(tsupPath)) {
-  rmSync(tsupPath)
-  console.log('✓ tsup.config.ts removed')
-}
-
-console.log('\n✅ LongPort broker patch removed successfully!\n')
-console.log('Next steps:')
-console.log('  1. pnpm install     # remove longbridge dependency')
-console.log('  2. pnpm build:backend')
+console.log('\n✅ Longbridge broker patch removed successfully!\n')

@@ -172,7 +172,10 @@ export function createTradingRoutes(ctx: EngineContext) {
     const id = c.req.param('id')
     const limit = Number(c.req.query('limit')) || 100
     try {
-      const snapshots = await ctx.snapshotService.getRecent(id, limit)
+      // Resolve broker account ID to UTA ID for snapshot lookup
+      const uta = ctx.accountManager.get(id)
+      if (!uta) return c.json({ snapshots: [] })
+      const snapshots = await ctx.snapshotService.getRecent(uta.id, limit)
       return c.json({ snapshots })
     } catch {
       return c.json({ snapshots: [] })

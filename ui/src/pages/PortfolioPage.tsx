@@ -351,8 +351,8 @@ function contractDisplay(p: Position): { name: string; tag?: string } {
   if (t === 'CRYPTO') {
     return { name: sym, tag: 'spot' }
   }
-  // STK, CASH, BOND, CMDTY, etc. — just the symbol, no tag
-  return { name: sym }
+  // STK, CASH, BOND, CMDTY, etc. — show symbol + company name if available
+  return { name: c.description ? `${sym} — ${c.description}` : sym }
 }
 
 function PositionsTable({ positions }: { positions: PositionWithAccount[] }) {
@@ -555,8 +555,8 @@ function fmt(n: number): string {
 }
 
 function fmtPnl(n: number): string {
-  const sign = n >= 0 ? '+' : ''
-  return `${sign}${fmt(n)}`
+  const sign = n >= 0 ? '+' : '-'
+  return `${sign}${fmt(Math.abs(n))}`
 }
 
 function fmtNum(n: number): string {

@@ -166,7 +166,7 @@ export function createTradingConfigRoutes(ctx: EngineContext) {
 
   // ==================== LongPort OAuth ====================
 
-  app.post('/longport/oauth-url', async (c) => {
+  app.post('/longbridge/oauth-url', async (c) => {
     try {
       const { appKey, appSecret } = await c.req.json()
       if (!appKey || !appSecret) {
@@ -189,11 +189,15 @@ export function createTradingConfigRoutes(ctx: EngineContext) {
       }
 
       // Build authorization URL
+      // Pass appKey/appSecret to callback via state (base64 encoded) so callback can exchange code
+      const stateObj = JSON.stringify({ appKey, appSecret, redirectUri: 'https://openalice.local/callback' })
+      const stateBase64 = Buffer.from(stateObj).toString('base64')
       const params = new URLSearchParams({
         client_id: registered.client_id,
         redirect_uri: 'https://openalice.local/callback',
         response_type: 'code',
         scope: 'trade market_data',
+        state: stateBase64,
       })
       const authUrl = `https://openapi.longbridge.com/oauth2/authorize?${params}`
 
@@ -208,7 +212,7 @@ export function createTradingConfigRoutes(ctx: EngineContext) {
     }
   })
 
-  app.post('/longport/exchange-token', async (c) => {
+  app.post('/longbridge/exchange-token', async (c) => {
     try {
       const { appKey, appSecret, code, redirectUri } = await c.req.json()
       if (!appKey || !appSecret || !code) {
@@ -246,7 +250,7 @@ export function createTradingConfigRoutes(ctx: EngineContext) {
 
   // ==================== LongPort Token Refresh ====================
 
-  app.post('/longport/refresh-token', async (c) => {
+  app.post('/longbridge/refresh-token', async (c) => {
     try {
       const { appKey, appSecret, accessToken } = await c.req.json()
       if (!appKey || !appSecret || !accessToken) {
@@ -290,6 +294,80 @@ export function createTradingConfigRoutes(ctx: EngineContext) {
       })
     } catch (err) {
       return c.json({ error: String(err) }, 500)
+    }
+  })
+
+
+  // ==================== LongPort OAuth Callback ====================
+
+  // GET /api/trading/config/longbridge/callback
+  // Called by LongPort after user authorizes — exchanges code for token and closes popup.
+  app.get('/longbridge/callback', async (c) => {
+    const code = c.req.query('code')
+    const state = c.req.query('state')
+    const error = c.req.query('error')
+    const errorDesc = c.req.query('error_description')
+
+    if (error || !code) {
+      const errMsg = encodeURIComponent(errorDesc ?? error ?? 'Authorization denied')
+      return c.html(`
+        <html><body>
+          <p style="font-family:sans-serif;color:red">Authorization failed: ${errorDesc ?? error}</p>
+          <script>window.opener?.postMessage({ longbridge_oauth_error: '${errMsg}' }, '*'); setTimeout(() => window.close(), 2000)</script>
+        </body></html>
+      `)
+    }
+
+    // Exchange code for token using appKey/appSecret from state
+    let appKey = '', appSecret = '', redirectUri = 'https://openalice.local/callback'
+    try {
+      if (state) {
+        const parsed = JSON.parse(Buffer.from(state, 'base64').toString())
+        appKey = parsed.appKey ?? ''
+        appSecret = parsed.appSecret ?? ''
+        redirectUri = parsed.redirectUri ?? redirectUri
+      }
+    } catch {}
+
+    if (!appKey || !appSecret) {
+      return c.html(`<html><body><p style="font-family:sans-serif">Missing app credentials in state.</p><script>setTimeout(() => window.close(), 3000)</script></body></html>`)
+    }
+
+    try {
+      const resp = await fetch('https://openapi.longbridge.com/oauth2/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          grant_type: 'authorization_code',
+          code,
+          redirect_uri: redirectUri,
+          client_id: appKey,
+          client_secret: appSecret,
+        }),
+      })
+      const data = await resp.json() as { access_token?: string; refresh_token?: string; expires_in?: number; error?: string }
+
+      if (data.error || !data.access_token) {
+        return c.html(`<html><body><p style="font-family:sans-serif;color:red">Token exchange failed: ${data.error ?? 'Unknown error'}</p><script>window.opener?.postMessage({ longbridge_oauth_error: String(data.error) }, '*'); setTimeout(() => window.close(), 3000)</script></body></html>`)
+      }
+
+      const expiresAt = new Date(Date.now() + (data.expires_in ?? 86400) * 1000).toISOString()
+      return c.html(`
+        <html><body>
+          <p style="font-family:sans-serif;color:green">Authorization successful! Token acquired.</p>
+          <p style="font-family:sans-serif;font-size:12px">This window will close automatically...</p>
+          <script>
+            window.opener?.postMessage({
+              longbridge_oauth_success: true,
+              accessToken: '${data.access_token}',
+              expiresIn: ${data.expires_in ?? 86400}
+            }, '*')
+            setTimeout(() => window.close(), 1500)
+          </script>
+        </body></html>
+      `)
+    } catch (err) {
+      return c.html(`<html><body><p style="font-family:sans-serif;color:red">Error: ${String(err)}</p><script>setTimeout(() => window.close(), 5000)</script></body></html>`)
     }
   })
 

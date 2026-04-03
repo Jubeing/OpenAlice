@@ -75,6 +75,9 @@ importers:
       json5:
         specifier: ^2.2.3
         version: 2.2.3
+      longbridge:
+        specifier: ^4.0.5
+        version: 4.0.5
       pino:
         specifier: ^10.3.1
         version: 10.3.1

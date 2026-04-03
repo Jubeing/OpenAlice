@@ -143,8 +143,8 @@ export const tradingApi = {
 
   // ==================== LongPort OAuth ====================
 
-  async getLongPortOAuthUrl(appKey: string, appSecret: string): Promise<{ url: string; clientId: string; clientSecret: string; note: string; error?: string }> {
-    const res = await fetch('/api/trading/config/longport/oauth-url', {
+  async getLongbridgeOAuthUrl(appKey: string, appSecret: string): Promise<{ url: string; clientId: string; clientSecret: string; note: string; error?: string }> {
+    const res = await fetch('/api/trading/config/longbridge/oauth-url', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ appKey, appSecret }),
@@ -152,8 +152,8 @@ export const tradingApi = {
     return res.json()
   },
 
-  async exchangeLongPortToken(appKey: string, appSecret: string, code: string, redirectUri?: string): Promise<{ accessToken: string; refreshToken?: string; expiresAt: string; error?: string }> {
-    const res = await fetch('/api/trading/config/longport/exchange-token', {
+  async exchangeLongbridgeToken(appKey: string, appSecret: string, code: string, redirectUri?: string): Promise<{ accessToken: string; refreshToken?: string; expiresAt: string; error?: string }> {
+    const res = await fetch('/api/trading/config/longbridge/exchange-token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ appKey, appSecret, code, redirectUri }),
@@ -161,8 +161,8 @@ export const tradingApi = {
     return res.json()
   },
 
-  async refreshLongPortToken(appKey: string, appSecret: string, accessToken: string): Promise<{ accessToken: string; expiresAt: string; error?: string }> {
-    const res = await fetch('/api/trading/config/longport/refresh-token', {
+  async refreshLongbridgeToken(appKey: string, appSecret: string, accessToken: string): Promise<{ accessToken: string; expiresAt: string; error?: string }> {
+    const res = await fetch('/api/trading/config/longbridge/refresh-token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ appKey, appSecret, accessToken }),

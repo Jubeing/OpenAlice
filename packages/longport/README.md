@@ -1,6 +1,6 @@
-# LongPort Broker Patch for OpenAlice
+# Longbridge Broker Patch for OpenAlice
 
-Adds **LongPort** as a new trading platform option in the OpenAlice "New Account" wizard.
+Adds **Longbridge** as a new trading platform option in the OpenAlice "New Account" wizard.
 
 ## Features
 
@@ -12,7 +12,7 @@ Adds **LongPort** as a new trading platform option in the OpenAlice "New Account
 
 ## Prerequisites
 
-- [LongPort OpenAPI account](https://open.longbridge.com/en/) — App Key, App Secret, Access Token
+- [Longbridge OpenAPI account](https://open.longbridge.com/en/) — App Key, App Secret, Access Token
 - Node.js 20+
 - OpenAlice installation (pnpm monorepo)
 
@@ -36,7 +36,7 @@ pnpm dev
 
 ### Manual Token (one-time)
 
-1. Go to **Trading → New Account → Platform → LongPort (HK/US/SG)**
+1. Go to **Trading → New Account → Platform → Longbridge (HK/US/SG)**
 2. Enter your **App Key**, **App Secret**, and **Access Token**
 3. Toggle **Auto-refresh Token** off (default)
 4. Click **Create Account**

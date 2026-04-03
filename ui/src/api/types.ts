@@ -198,6 +198,7 @@ export interface Position {
     right?: string
     multiplier?: number
     localSymbol?: string
+    description?: string
   }
   side: 'long' | 'short'
   quantity: string // Decimal serialized as string

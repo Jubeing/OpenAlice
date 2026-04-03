@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * LongPort token refresh cron script.
+ * Longbridge token refresh cron script.
  *
- * Run this via crontab to auto-refresh LongPort tokens every 90 days.
+ * Run this via crontab to auto-refresh Longbridge tokens every 90 days.
  *
  * Crontab entry (runs on the 1st of every month at 4 AM):
  *   0 4 1 * * cd /home/ubuntu/OpenAlice && node packages/longport/scripts/refresh-token.mjs
@@ -25,19 +25,19 @@ async function main() {
   }
 
   const accounts = JSON.parse(readFileSync(accountsPath, 'utf8'))
-  const longportAccounts = accounts.filter((a) => a.type === 'longport' && a.brokerConfig?.autoRefresh)
+  const longbridgeAccounts = accounts.filter((a) => a.type === 'longbridge' && a.brokerConfig?.autoRefresh)
 
-  if (longportAccounts.length === 0) {
-    console.log('No LongPort accounts with auto-refresh enabled.')
+  if (longbridgeAccounts.length === 0) {
+    console.log('No Longbridge accounts with auto-refresh enabled.')
     return
   }
 
-  const { refreshAccessToken } = await import('../src/longport-auth.js').catch(() => {
+  const { refreshAccessToken } = await import('../src/longbridge-auth.js').catch(() => {
     // Try built dist
-    return import('../../packages/longport/dist/longport-auth.js')
+    return import('../../packages/longport/dist/longbridge-auth.js')
   })
 
-  for (const account of longportAccounts) {
+  for (const account of longbridgeAccounts) {
     const { appKey, appSecret, accessToken } = account.brokerConfig
     if (!appKey || !appSecret || !accessToken) {
       console.warn(`Skipping ${account.id}: missing credentials`)

@@ -356,34 +356,56 @@ function CreateWizard({ brokerTypes, existingAccountIds, onSave, onClose }: {
   const [brokerConfig, setBrokerConfig] = useState<Record<string, unknown>>({})
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  // LongPort OAuth state
-  const [oauthUrl, setOauthUrl] = useState<string>('')
-  const [oauthCode, setOauthCode] = useState<string>('')
   const [oauthLoading, setOauthLoading] = useState(false)
   const [oauthError, setOauthError] = useState<string>('')
-  const [oauthModalOpen, setOauthModalOpen] = useState(false)
 
   const bt = brokerTypes.find(b => b.type === type)
-  // For longport: all fields in step 1 (including OAuth button), no step 2
-  const isLongPort = type === 'longport'
-  const hasSensitive = (bt?.fields.some(f => f.sensitive) ?? false) && !isLongPort
+  const isLongbridge = type === 'longbridge'
+  const hasSensitive = (bt?.fields.some(f => f.sensitive) ?? false) && !isLongbridge
   const totalSteps = hasSensitive ? 2 : 1
 
-  // Split fields: longport shows ALL fields in step 1; others split by sensitive flag
-  const connectionFields = isLongPort
+  // Split fields: longbridge shows ALL fields in step 1; others split by sensitive flag
+  const connectionFields = isLongbridge
     ? (bt?.fields ?? [])
     : (bt?.fields.filter(f => !f.sensitive) ?? [])
-  const credentialFields = bt?.fields.filter(f => f.sensitive && !isLongPort) ?? []
+  const credentialFields = bt?.fields.filter(f => f.sensitive && !isLongbridge) ?? []
 
-  // Initialize defaults when type changes
+  // Initialize defaults only when creating a new account (no saved accountId).
+  // When editing, brokerConfig already contains the saved values from the account.
   useEffect(() => {
     if (!bt) return
+    // Only apply defaults when there's no saved account being edited
+    if (id) return // id is the saved accountId
     const defaults: Record<string, unknown> = {}
     for (const f of bt.fields) {
       if (f.default !== undefined) defaults[f.name] = f.default
     }
     setBrokerConfig(defaults)
   }, [type])
+
+  // When autoRefresh is toggled ON for LongPort, automatically refresh ACCESS_TOKEN
+  useEffect(() => {
+    if (!isLongbridge || !type) return
+    const autoOn = brokerConfig['autoRefresh']
+    if (!autoOn) return
+    const appKey = String(brokerConfig['appKey'] ?? '').trim()
+    const appSecret = String(brokerConfig['appSecret'] ?? '').trim()
+    const currentToken = String(brokerConfig['accessToken'] ?? '').trim()
+    if (!appKey || !appSecret) { setOauthError('Enter LONGBRIDGE_APP_KEY and LONGBRIDGE_APP_SECRET first.'); return }
+    if (!currentToken) { setOauthError('Enter ACCESS_TOKEN first, then turn on Auto-refresh Token.'); return }
+    setOauthLoading(true); setOauthError('')
+
+    // Directly call refresh-token endpoint — fully automatic, no popup needed
+    api.trading.refreshLongbridgeToken(appKey, appSecret, currentToken).then(result => {
+      if (result.error) { setOauthError(result.error); setOauthLoading(false); return }
+      setBrokerConfig(prev => ({ ...prev, accessToken: result.accessToken, tokenExpiry: result.expiresAt }))
+      setOauthLoading(false)
+    }).catch(err => { setOauthError(err instanceof Error ? err.message : String(err)); setOauthLoading(false) })
+  }, [brokerConfig['autoRefresh']])
+
+  const handleBrokerChange = (field: string, value: unknown) => {
+    setBrokerConfig(prev => ({ ...prev, [field]: value }))
+  }
 
   const defaultId = type ? `${type}-main` : ''
   const finalId = id.trim() || defaultId
@@ -467,80 +489,9 @@ function CreateWizard({ brokerTypes, existingAccountIds, onSave, onClose }: {
                   fields={connectionFields}
                   values={brokerConfig}
                   showSecrets={false}
-                  onChange={(f, v) => setBrokerConfig(prev => ({ ...prev, [f]: v }))}
+                  onChange={handleBrokerChange}
                 />
-                {/* LongPort: Acquire Access Token button */}
-                {type === 'longport' && (
-                  <div className="border border-border rounded-lg p-3 space-y-2">
-                    <p className="text-[11px] font-medium text-text-muted mb-1">LONGPORT_ACCESS_TOKEN</p>
-                    {!oauthModalOpen ? (
-                      <button
-                        onClick={async () => {
-                          const appKey = String(brokerConfig['appKey'] ?? '').trim()
-                          const appSecret = String(brokerConfig['appSecret'] ?? '').trim()
-                          if (!appKey || !appSecret) {
-                            setOauthError('Please enter LONGPORT_APP_KEY and LONGPORT_APP_SECRET first.')
-                            return
-                          }
-                          setOauthLoading(true)
-                          setOauthError('')
-                          try {
-                            const result = await api.trading.getLongPortOAuthUrl(appKey, appSecret)
-                            if (result.error) { setOauthError(result.error) }
-                            else { setOauthUrl(result.url); setOauthModalOpen(true) }
-                          } catch (e) { setOauthError(e instanceof Error ? e.message : String(e)) }
-                          finally { setOauthLoading(false) }
-                        }}
-                        disabled={oauthLoading}
-                        className="btn-secondary text-[12px]"
-                      >
-                        {oauthLoading ? 'Generating URL...' : 'Acquire Access Token'}
-                      </button>
-                    ) : (
-                      <div className="space-y-2">
-                        <div className="bg-bg-tertiary rounded p-2 text-[11px]">
-                          <p className="text-text-muted mb-1">1. Visit this URL to authorize:</p>
-                          <a href={oauthUrl} target="_blank" rel="noopener noreferrer" className="text-accent underline break-all">
-                            {oauthUrl.length > 60 ? oauthUrl.slice(0, 60) + '...' : oauthUrl}
-                          </a>
-                        </div>
-                        <div>
-                          <p className="text-[11px] text-text-muted mb-1">2. Paste the authorization code from the redirect:</p>
-                          <textarea
-                            className="w-full text-[12px] bg-bg-tertiary border border-border rounded px-2 py-1.5 text-text resize-none"
-                            rows={3} value={oauthCode} onChange={e => setOauthCode(e.target.value)}
-                            placeholder="Paste authorization code here..."
-                          />
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={async () => {
-                              const appKey = String(brokerConfig['appKey'] ?? '').trim()
-                              const appSecret = String(brokerConfig['appSecret'] ?? '').trim()
-                              if (!oauthCode.trim()) { setOauthError('Paste the authorization code first.'); return }
-                              setOauthLoading(true); setOauthError('')
-                              try {
-                                const result = await api.trading.exchangeLongPortToken(appKey, appSecret, oauthCode.trim())
-                                if (result.error) { setOauthError(result.error) }
-                                else {
-                                  setBrokerConfig(prev => ({ ...prev, accessToken: result.accessToken, tokenExpiry: result.expiresAt }))
-                                  setOauthModalOpen(false); setOauthCode(''); setOauthUrl('')
-                                }
-                              } catch (e) { setOauthError(e instanceof Error ? e.message : String(e)) }
-                              finally { setOauthLoading(false) }
-                            }}
-                            disabled={oauthLoading || !oauthCode.trim()}
-                            className="btn-primary text-[12px]"
-                          >
-                            {oauthLoading ? 'Exchanging...' : 'Exchange Code for Token'}
-                          </button>
-                          <button onClick={() => { setOauthModalOpen(false); setOauthCode(''); setOauthUrl(''); setOauthError('') }} className="btn-secondary text-[12px]">Cancel</button>
-                        </div>
-                      </div>
-                    )}
-                    {oauthError && <p className="text-[11px] text-red">{oauthError}</p>}
-                  </div>
-                )}
+
               </div>
             )}
             {error && <p className="text-[12px] text-red">{error}</p>}
@@ -561,7 +512,7 @@ function CreateWizard({ brokerTypes, existingAccountIds, onSave, onClose }: {
               fields={credentialFields}
               values={brokerConfig}
               showSecrets={false}
-              onChange={(f, v) => setBrokerConfig(prev => ({ ...prev, [f]: v }))}
+              onChange={handleBrokerChange}
             />
             {error && <p className="text-[12px] text-red">{error}</p>}
           </div>
