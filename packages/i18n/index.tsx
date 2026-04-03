@@ -5,7 +5,10 @@ import { zh } from './zh'
 export type Locale = 'en' | 'zh'
 export type Translations = typeof en
 
-const translations: Record<Locale, Translations> = { en, zh }
+// Nested section types — use these for typed hook access: Translations['events'], Translations['marketData'], etc.
+export type LocaleDict = Translations
+
+export const translations: Record<Locale, Translations> = { en, zh }
 
 interface I18nContextValue {
   locale: Locale

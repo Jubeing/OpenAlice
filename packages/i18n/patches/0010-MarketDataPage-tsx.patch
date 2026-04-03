@@ -1,0 +1,271 @@
+diff --git a/ui/src/pages/MarketDataPage.tsx b/ui/src/pages/MarketDataPage.tsx
+index 49e3d1e..cc97be1 100644
+--- a/ui/src/pages/MarketDataPage.tsx
++++ b/ui/src/pages/MarketDataPage.tsx
+@@ -5,6 +5,7 @@ import { ConfigSection, Field, inputClass } from '../components/form'
+ import { Toggle } from '../components/Toggle'
+ import { useConfigPage } from '../hooks/useConfigPage'
+ import { PageHeader } from '../components/PageHeader'
++import { useTranslation, type Translations } from '../i18n'
+ 
+ type MarketDataConfig = Record<string, unknown>
+ 
+@@ -16,10 +17,10 @@ const PROVIDER_OPTIONS: Record<string, string[]> = {
+   currency: ['yfinance', 'fmp', 'tiingo'],
+ }
+ 
+-const ASSET_LABELS: Record<string, string> = {
+-  equity: 'Equity',
+-  crypto: 'Crypto',
+-  currency: 'Currency',
++const ASSET_LABELS_KEYS: Record<string, keyof Translations['marketData']> = {
++  equity: 'equity',
++  crypto: 'crypto',
++  currency: 'currency',
+ }
+ 
+ /** Maps provider name → providerKeys key. null means free, no key required. */
+@@ -48,10 +49,18 @@ function TestButton({
+   status,
+   disabled,
+   onClick,
++  testLabel,
++  testingLabel,
++  okLabel,
++  failLabel,
+ }: {
+   status: 'idle' | 'testing' | 'ok' | 'error'
+   disabled: boolean
+   onClick: () => void
++  testLabel: string
++  testingLabel: string
++  okLabel: string
++  failLabel: string
+ }) {
+   return (
+     <button
+@@ -65,7 +74,7 @@ function TestButton({
+             : 'border-border text-text-muted hover:bg-bg-tertiary hover:text-text'
+       }`}
+     >
+-      {status === 'testing' ? '…' : status === 'ok' ? 'OK' : status === 'error' ? 'Fail' : 'Test'}
++      {status === 'testing' ? testingLabel : status === 'ok' ? okLabel : status === 'error' ? failLabel : testLabel}
+     </button>
+   )
+ }
+@@ -73,6 +82,7 @@ function TestButton({
+ // ==================== Page ====================
+ 
+ export function MarketDataPage() {
++  const { t } = useTranslation()
+   const { config, status, loadError, updateConfig, updateConfigImmediate, retry } = useConfigPage<MarketDataConfig>({
+     section: 'marketData',
+     extract: (full: AppConfig) => (full as Record<string, unknown>).marketData as MarketDataConfig,
+@@ -83,9 +93,9 @@ export function MarketDataPage() {
+   if (!config) {
+     return (
+       <div className="flex flex-col flex-1 min-h-0">
+-        <PageHeader title="Market Data" description="Structured financial data — prices, fundamentals, macro indicators." />
++        <PageHeader title={t.marketData.title} description={t.marketData.titleDesc} />
+         <div className="flex-1 flex items-center justify-center">
+-          <p className="text-[13px] text-text-muted">Loading…</p>
++          <p className="text-[13px] text-text-muted">{t.marketData.loading}</p>
+         </div>
+       </div>
+     )
+@@ -114,8 +124,8 @@ export function MarketDataPage() {
+   return (
+     <div className="flex flex-col flex-1 min-h-0">
+       <PageHeader
+-        title="Market Data"
+-        description="Structured financial data — prices, fundamentals, macro indicators."
++        title={t.marketData.title}
++        description={t.marketData.titleDesc}
+         right={
+           <div className="flex items-center gap-3">
+             <SaveIndicator status={status} onRetry={retry} />
+@@ -144,12 +154,12 @@ export function MarketDataPage() {
+ 
+           {/* Embedded API Server */}
+           <ConfigSection
+-            title="Embedded API Server"
+-            description="Expose an OpenBB-compatible HTTP API from Alice. Other services can connect to query market data."
++            title={t.marketData.embeddedApiServer}
++            description={t.marketData.embeddedApiServerDesc}
+           >
+             <div className="flex items-center justify-between mb-3">
+               <div>
+-                <p className="text-[13px] text-text">Enable HTTP server</p>
++                <p className="text-[13px] text-text">{t.marketData.enableHttpServer}</p>
+                 <p className="text-[12px] text-text-muted/60 mt-0.5">
+                   Serves at <span className="font-mono text-[11px]">http://localhost:{apiServer.port}</span>
+                 </p>
+@@ -161,7 +171,7 @@ export function MarketDataPage() {
+               />
+             </div>
+             {apiServer.enabled && (
+-              <Field label="Port">
++              <Field label={t.connectors.port}>
+                 <input
+                   className={`${inputClass} w-28`}
+                   type="number"
+@@ -180,7 +190,7 @@ export function MarketDataPage() {
+             onKeyChange={handleKeyChange}
+           />
+         </div>
+-        {loadError && <p className="text-[13px] text-red mt-4 max-w-[880px] mx-auto">Failed to load configuration.</p>}
++        {loadError && <p className="text-[13px] text-red mt-4 max-w-[880px] mx-auto">{t.marketData.loadFailed}</p>}
+       </div>
+     </div>
+   )
+@@ -199,6 +209,7 @@ function DataBackendSection({
+   onBackendChange: (backend: string) => void
+   onApiUrlChange: (url: string) => void
+ }) {
++  const { t } = useTranslation()
+   const [testing, setTesting] = useState(false)
+   const [testStatus, setTestStatus] = useState<'idle' | 'ok' | 'error'>('idle')
+ 
+@@ -217,8 +228,8 @@ function DataBackendSection({
+ 
+   return (
+     <ConfigSection
+-      title="Data Backend"
+-      description="Choose between the built-in TypeBB engine or an external OpenBB-compatible API."
++      title={t.marketData.dataBackend}
++      description={t.marketData.dataBackendDesc}
+     >
+       <div className="flex border border-border rounded-lg overflow-hidden w-fit mb-3">
+         {(['typebb-sdk', 'openbb-api'] as const).map((opt, i) => (
+@@ -233,19 +244,19 @@ function DataBackendSection({
+                 : 'text-text-muted hover:text-text'
+             }`}
+           >
+-            {opt === 'typebb-sdk' ? 'Built-in Engine (TypeBB)' : 'External OpenBB API'}
++            {opt === 'typebb-sdk' ? t.marketData.builtInEngine : t.marketData.externalApi}
+           </button>
+         ))}
+       </div>
+       <p className="text-[13px] text-text-muted/70">
+         {backend === 'typebb-sdk'
+-          ? 'Uses the built-in TypeBB engine. No external process required.'
+-          : 'Connects to an external OpenBB-compatible HTTP endpoint.'}
++          ? t.marketData.builtInEngineDesc
++          : t.marketData.externalApiDesc}
+       </p>
+ 
+       {backend === 'openbb-api' && (
+         <div className="mt-4">
+-          <Field label="API URL">
++          <Field label={t.marketData.apiUrl}>
+             <div className="flex items-center gap-2">
+               <input
+                 className={inputClass}
+@@ -264,7 +275,7 @@ function DataBackendSection({
+                       : 'border-border text-text-muted hover:bg-bg-tertiary hover:text-text'
+                 }`}
+               >
+-                {testing ? 'Testing…' : testStatus === 'ok' ? 'Connected' : testStatus === 'error' ? 'Failed' : 'Test'}
++                {testing ? t.marketData.testing : testStatus === 'ok' ? t.marketData.connected : testStatus === 'error' ? t.marketData.failed : t.marketData.test}
+               </button>
+             </div>
+           </Field>
+@@ -282,6 +293,7 @@ function AssetProvidersSection({
+   onProviderChange,
+   onKeyChange,
+ }: AssetProviderGridProps) {
++  const { t } = useTranslation()
+   const [localKeys, setLocalKeys] = useState<Record<string, string>>(() => ({ ...providerKeys }))
+   const [testStatus, setTestStatus] = useState<Record<string, 'idle' | 'testing' | 'ok' | 'error'>>({})
+ 
+@@ -303,20 +315,23 @@ function AssetProvidersSection({
+     }
+   }
+ 
++  const m = t.marketData
++
+   return (
+     <ConfigSection
+-      title="Asset Providers"
+-      description="Select a data provider for each asset class. Providers requiring an API key show a key input and test button."
++      title={m.assetProviders}
++      description={m.assetProvidersDesc}
+     >
+       <div className="space-y-3">
+         {Object.entries(PROVIDER_OPTIONS).map(([asset, options]) => {
+           const selectedProvider = providers[asset] || options[0]
+           const keyName = PROVIDER_KEY_MAP[selectedProvider] ?? null
+           const status = keyName ? (testStatus[keyName] || 'idle') : 'idle'
++          const labelKey = ASSET_LABELS_KEYS[asset as keyof typeof ASSET_LABELS_KEYS] ?? asset
+ 
+           return (
+             <div key={asset} className="flex items-center gap-3">
+-              <span className="text-[13px] text-text w-20 shrink-0 font-medium">{ASSET_LABELS[asset]}</span>
++              <span className="text-[13px] text-text w-20 shrink-0 font-medium">{(m as Record<string, string>)[labelKey] ?? asset}</span>
+               <select
+                 className={`${inputClass} max-w-[160px]`}
+                 value={selectedProvider}
+@@ -331,16 +346,20 @@ function AssetProvidersSection({
+                     type="password"
+                     value={localKeys[keyName] || ''}
+                     onChange={(e) => handleKeyChange(keyName, e.target.value)}
+-                    placeholder="API key"
++                    placeholder={m.apiKey}
+                   />
+                   <TestButton
+                     status={status}
+                     disabled={!localKeys[keyName] || status === 'testing'}
+                     onClick={() => testProvider(selectedProvider, keyName)}
++                    testLabel={m.test}
++                    testingLabel={m.testing}
++                    okLabel={m.connected}
++                    failLabel={m.failed}
+                   />
+                 </>
+               ) : (
+-                <span className="text-[13px] text-text-muted/50 px-1">Free</span>
++                <span className="text-[13px] text-text-muted/50 px-1">{m.free}</span>
+               )}
+             </div>
+           )
+@@ -366,6 +385,7 @@ function UtilityProvidersSection({
+   providerKeys: Record<string, string>
+   onKeyChange: (keyName: string, value: string) => void
+ }) {
++  const { t } = useTranslation()
+   const [localKeys, setLocalKeys] = useState<Record<string, string>>(() => {
+     const init: Record<string, string> = {}
+     for (const p of UTILITY_PROVIDERS) init[p.key] = providerKeys[p.key] || ''
+@@ -391,10 +411,12 @@ function UtilityProvidersSection({
+     }
+   }
+ 
++  const m = t.marketData
++
+   return (
+     <ConfigSection
+-      title="Macro & Utility Providers"
+-      description="Used by dedicated macro endpoints — FRED for CPI/GDP, BLS for employment, EIA for energy. Not per-asset-class selectable."
++      title={m.macroUtilityProviders}
++      description={m.macroUtilityProvidersDesc}
+     >
+       <div className="space-y-4">
+         {UTILITY_PROVIDERS.map(({ key, name, desc, hint }) => {
+@@ -408,12 +430,16 @@ function UtilityProvidersSection({
+                   type="password"
+                   value={localKeys[key]}
+                   onChange={(e) => handleKeyChange(key, e.target.value)}
+-                  placeholder="Not configured"
++                  placeholder={m.apiKey}
+                 />
+                 <TestButton
+                   status={status}
+                   disabled={!localKeys[key] || status === 'testing'}
+                   onClick={() => testProvider(key)}
++                  testLabel={m.test}
++                  testingLabel={m.testing}
++                  okLabel={m.connected}
++                  failLabel={m.failed}
+                 />
+               </div>
+             </Field>

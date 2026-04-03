@@ -1,0 +1,176 @@
+diff --git a/ui/src/pages/AgentStatusPage.tsx b/ui/src/pages/AgentStatusPage.tsx
+index 7bfadb9..fe6420d 100644
+--- a/ui/src/pages/AgentStatusPage.tsx
++++ b/ui/src/pages/AgentStatusPage.tsx
+@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
+ import { api, type ToolCallRecord } from '../api'
+ import { useSSE } from '../hooks/useSSE'
+ import { PageHeader } from '../components/PageHeader'
++import { useTranslation } from '../i18n'
+ 
+ // ==================== Helpers ====================
+ 
+@@ -27,6 +28,7 @@ function statusColor(status: string): string {
+ const PAGE_SIZE = 100
+ 
+ export function AgentStatusPage() {
++  const { t } = useTranslation()
+   const [entries, setEntries] = useState<ToolCallRecord[]>([])
+   const [nameFilter, setNameFilter] = useState('')
+   const [paused, setPaused] = useState(false)
+@@ -58,7 +60,6 @@ export function AgentStatusPage() {
+ 
+   useEffect(() => { fetchPage(1) }, [fetchPage])
+ 
+-  // Track tool names for filter dropdown
+   useEffect(() => {
+     if (entries.length > 0) {
+       setToolNames((prev) => {
+@@ -69,7 +70,6 @@ export function AgentStatusPage() {
+     }
+   }, [entries])
+ 
+-  // SSE real-time updates
+   useSSE({
+     url: '/api/agent-status/stream',
+     onMessage: (record: ToolCallRecord) => {
+@@ -100,7 +100,7 @@ export function AgentStatusPage() {
+ 
+   return (
+     <div className="flex flex-col flex-1 min-h-0">
+-      <PageHeader title="Agent Status" />
++      <PageHeader title={t.agentStatus.title} />
+ 
+       <div className="flex-1 flex flex-col min-h-0 px-4 md:px-6 py-5">
+         <div className="flex flex-col gap-3 h-full">
+@@ -111,7 +111,7 @@ export function AgentStatusPage() {
+               onChange={(e) => handleNameChange(e.target.value)}
+               className="bg-bg-tertiary text-text text-sm rounded-md border border-border px-2 py-1.5 outline-none focus:border-accent"
+             >
+-              <option value="">All tools</option>
++              <option value="">{t.agentStatus.allTools}</option>
+               {toolNames.map((n) => (
+                 <option key={n} value={n}>{n}</option>
+               ))}
+@@ -125,15 +125,15 @@ export function AgentStatusPage() {
+                   : 'border-border text-text-muted hover:bg-bg-tertiary'
+               }`}
+             >
+-              {paused ? 'Resume' : 'Pause'}
++              {paused ? t.agentStatus.resume : t.agentStatus.pause}
+             </button>
+ 
+             <span className="text-xs text-text-muted ml-auto">
+               {total > 0
+-                ? `Page ${page} of ${totalPages} \u00b7 ${total} calls`
+-                : '0 calls'
++                ? `Page ${page} of ${totalPages} · ${total} ${t.agentStatus.calls}`
++                : `0 ${t.agentStatus.calls}`
+               }
+-              {nameFilter && ' (filtered)'}
++              {nameFilter && ` ${t.agentStatus.filtered}`}
+             </span>
+           </div>
+ 
+@@ -143,19 +143,19 @@ export function AgentStatusPage() {
+             className="flex-1 min-h-0 bg-bg rounded-lg border border-border overflow-y-auto font-mono text-xs"
+           >
+             {loading && entries.length === 0 ? (
+-              <div className="px-4 py-8 text-center text-text-muted">Loading...</div>
++              <div className="px-4 py-8 text-center text-text-muted">{t.agentStatus.loading}</div>
+             ) : entries.length === 0 ? (
+-              <div className="px-4 py-8 text-center text-text-muted">No tool calls yet</div>
++              <div className="px-4 py-8 text-center text-text-muted">{t.agentStatus.noToolCalls}</div>
+             ) : (
+               <table className="w-full">
+                 <thead className="sticky top-0 bg-bg-secondary">
+                   <tr className="text-text-muted text-left">
+                     <th className="px-3 py-2 w-12">#</th>
+-                    <th className="px-3 py-2 w-36">Time</th>
+-                    <th className="px-3 py-2 w-48">Tool</th>
+-                    <th className="px-3 py-2 w-20 text-right">Duration</th>
+-                    <th className="px-3 py-2 w-16 text-center">Status</th>
+-                    <th className="px-3 py-2">Input</th>
++                    <th className="px-3 py-2 w-36">{t.agentStatus.time}</th>
++                    <th className="px-3 py-2 w-48">{t.agentStatus.tool}</th>
++                    <th className="px-3 py-2 w-20 text-right">{t.agentStatus.duration}</th>
++                    <th className="px-3 py-2 w-16 text-center">{t.agentStatus.status}</th>
++                    <th className="px-3 py-2">{t.agentStatus.input}</th>
+                   </tr>
+                 </thead>
+                 <tbody>
+@@ -170,37 +170,11 @@ export function AgentStatusPage() {
+           {/* Pagination */}
+           {totalPages > 1 && (
+             <div className="flex items-center justify-center gap-2 shrink-0">
+-              <button
+-                onClick={() => goToPage(1)}
+-                disabled={page <= 1 || loading}
+-                className="text-xs px-2 py-1 rounded border border-border text-text-muted hover:text-text hover:bg-bg-tertiary transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+-              >
+-                &laquo;&laquo;
+-              </button>
+-              <button
+-                onClick={() => goToPage(page - 1)}
+-                disabled={page <= 1 || loading}
+-                className="text-xs px-2 py-1 rounded border border-border text-text-muted hover:text-text hover:bg-bg-tertiary transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+-              >
+-                &laquo;
+-              </button>
+-              <span className="text-xs text-text-muted px-2">
+-                {page} / {totalPages}
+-              </span>
+-              <button
+-                onClick={() => goToPage(page + 1)}
+-                disabled={page >= totalPages || loading}
+-                className="text-xs px-2 py-1 rounded border border-border text-text-muted hover:text-text hover:bg-bg-tertiary transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+-              >
+-                &raquo;
+-              </button>
+-              <button
+-                onClick={() => goToPage(totalPages)}
+-                disabled={page >= totalPages || loading}
+-                className="text-xs px-2 py-1 rounded border border-border text-text-muted hover:text-text hover:bg-bg-tertiary transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+-              >
+-                &raquo;&raquo;
+-              </button>
++              <button onClick={() => goToPage(1)} disabled={page <= 1 || loading} className="text-xs px-2 py-1 rounded border border-border text-text-muted hover:text-text hover:bg-bg-tertiary transition-colors disabled:opacity-30 disabled:cursor-not-allowed">&laquo;&laquo;</button>
++              <button onClick={() => goToPage(page - 1)} disabled={page <= 1 || loading} className="text-xs px-2 py-1 rounded border border-border text-text-muted hover:text-text hover:bg-bg-tertiary transition-colors disabled:opacity-30 disabled:cursor-not-allowed">&laquo;</button>
++              <span className="text-xs text-text-muted px-2">{page} / {totalPages}</span>
++              <button onClick={() => goToPage(page + 1)} disabled={page >= totalPages || loading} className="text-xs px-2 py-1 rounded border border-border text-text-muted hover:text-text hover:bg-bg-tertiary transition-colors disabled:opacity-30 disabled:cursor-not-allowed">&raquo;</button>
++              <button onClick={() => goToPage(totalPages)} disabled={page >= totalPages || loading} className="text-xs px-2 py-1 rounded border border-border text-text-muted hover:text-text hover:bg-bg-tertiary transition-colors disabled:opacity-30 disabled:cursor-not-allowed">&raquo;&raquo;</button>
+             </div>
+           )}
+         </div>
+@@ -212,6 +186,7 @@ export function AgentStatusPage() {
+ // ==================== Row ====================
+ 
+ function ToolCallRow({ record }: { record: ToolCallRecord }) {
++  const { t } = useTranslation()
+   const [expanded, setExpanded] = useState(false)
+   const inputStr = JSON.stringify(record.input)
+   const inputPreview = inputStr.length > 100 ? inputStr.slice(0, 100) + '...' : inputStr
+@@ -236,13 +211,13 @@ function ToolCallRow({ record }: { record: ToolCallRecord }) {
+         <tr className="border-t border-border/30">
+           <td colSpan={6} className="px-3 py-2 space-y-2">
+             <div>
+-              <span className="text-text-muted text-[11px] uppercase tracking-wide">Input</span>
++              <span className="text-text-muted text-[11px] uppercase tracking-wide">{t.agentStatus.input}</span>
+               <pre className="text-text-muted whitespace-pre-wrap break-all bg-bg-tertiary rounded p-2 text-[11px] mt-1">
+                 {JSON.stringify(record.input, null, 2)}
+               </pre>
+             </div>
+             <div>
+-              <span className="text-text-muted text-[11px] uppercase tracking-wide">Output</span>
++              <span className="text-text-muted text-[11px] uppercase tracking-wide">{t.agentStatus.output}</span>
+               <pre className="text-text-muted whitespace-pre-wrap break-all bg-bg-tertiary rounded p-2 text-[11px] mt-1 max-h-64 overflow-y-auto">
+                 {formatOutput(record.output)}
+               </pre>
+@@ -254,7 +229,6 @@ function ToolCallRow({ record }: { record: ToolCallRecord }) {
+   )
+ }
+ 
+-/** Try to pretty-print JSON output, fall back to raw string. */
+ function formatOutput(output: string): string {
+   try {
+     return JSON.stringify(JSON.parse(output), null, 2)

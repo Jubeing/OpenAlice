@@ -6,7 +6,28 @@ import { execSync } from 'child_process'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(__dirname, '../../..')
 
-function patch(file, patchFile) {
+const PATCHES = [
+  '0001-main-tsx.patch',
+  '0002-Sidebar-tsx.patch',
+  '0003-SettingsPage-tsx.patch',
+  '0004-DevPage-tsx.patch',
+  '0005-AIProviderPage-tsx.patch',
+  '0006-TradingPage-tsx.patch',
+  '0007-ToolsPage-tsx.patch',
+  '0008-ConnectorsPage-tsx.patch',
+  '0009-NewsPage-tsx.patch',
+  '0010-MarketDataPage-tsx.patch',
+  '0011-HeartbeatPage-tsx.patch',
+  '0012-AgentStatusPage-tsx.patch',
+  '0013-EventsPage-tsx.patch',
+  '0014-PortfolioPage-tsx.patch',
+  '0015-ChatPage-tsx.patch',
+  '0016-i18n-en-ts.patch',
+  '0017-i18n-zh-ts.patch',
+  '0018-i18n-index-tsx.patch',
+]
+
+function patch(patchFile) {
   const patchPath = resolve(__dirname, '../patches', patchFile)
   console.log(`Applying patch: ${patchFile}`)
   try {
@@ -18,14 +39,7 @@ function patch(file, patchFile) {
 }
 
 // Apply patches in order
-patch('main.tsx', '0001-main-tsx.patch')
-patch('Sidebar.tsx', '0002-Sidebar-tsx.patch')
-patch('SettingsPage.tsx', '0003-SettingsPage-tsx.patch')
-patch('DevPage.tsx', '0004-DevPage-tsx.patch')
-patch('AIProviderPage.tsx', '0005-AIProviderPage-tsx.patch')
-patch('TradingPage.tsx', '0006-TradingPage-tsx.patch')
-patch('ToolsPage.tsx', '0007-ToolsPage-tsx.patch')
-patch('ConnectorsPage.tsx', '0008-ConnectorsPage-tsx.patch')
+for (const p of PATCHES) patch(p)
 
 // Copy new i18n files
 console.log('Copying i18n files...')

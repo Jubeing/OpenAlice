@@ -6,6 +6,27 @@ import { execSync } from 'child_process'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(__dirname, '../../..')
 
+const PATCHES = [
+  '0018-i18n-index-tsx.patch',
+  '0017-i18n-zh-ts.patch',
+  '0016-i18n-en-ts.patch',
+  '0015-ChatPage-tsx.patch',
+  '0014-PortfolioPage-tsx.patch',
+  '0013-EventsPage-tsx.patch',
+  '0012-AgentStatusPage-tsx.patch',
+  '0011-HeartbeatPage-tsx.patch',
+  '0010-MarketDataPage-tsx.patch',
+  '0009-NewsPage-tsx.patch',
+  '0008-ConnectorsPage-tsx.patch',
+  '0007-ToolsPage-tsx.patch',
+  '0006-TradingPage-tsx.patch',
+  '0005-AIProviderPage-tsx.patch',
+  '0004-DevPage-tsx.patch',
+  '0003-SettingsPage-tsx.patch',
+  '0002-Sidebar-tsx.patch',
+  '0001-main-tsx.patch',
+]
+
 function unpatch(patchFile) {
   const patchPath = resolve(__dirname, '../patches', patchFile)
   console.log(`Reverting patch: ${patchFile}`)
@@ -17,14 +38,7 @@ function unpatch(patchFile) {
 }
 
 // Revert patches in reverse order
-unpatch('0008-ConnectorsPage-tsx.patch')
-unpatch('0007-ToolsPage-tsx.patch')
-unpatch('0006-TradingPage-tsx.patch')
-unpatch('0005-AIProviderPage-tsx.patch')
-unpatch('0004-DevPage-tsx.patch')
-unpatch('0003-SettingsPage-tsx.patch')
-unpatch('0002-Sidebar-tsx.patch')
-unpatch('0001-main-tsx.patch')
+for (const p of PATCHES) unpatch(p)
 
 // Remove i18n files
 console.log('Removing i18n files...')

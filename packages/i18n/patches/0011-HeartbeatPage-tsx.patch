@@ -1,0 +1,226 @@
+diff --git a/ui/src/pages/HeartbeatPage.tsx b/ui/src/pages/HeartbeatPage.tsx
+index f4db2d1..0559e9e 100644
+--- a/ui/src/pages/HeartbeatPage.tsx
++++ b/ui/src/pages/HeartbeatPage.tsx
+@@ -5,6 +5,7 @@ import { SaveIndicator } from '../components/SaveIndicator'
+ import { ConfigSection, Section, Field, inputClass } from '../components/form'
+ import { useAutoSave } from '../hooks/useAutoSave'
+ import { PageHeader } from '../components/PageHeader'
++import { useTranslation } from '../i18n'
+ 
+ // ==================== Helpers ====================
+ 
+@@ -25,6 +26,7 @@ function eventTypeColor(type: string): string {
+ // ==================== Status Bar ====================
+ 
+ function StatusBar() {
++  const { t } = useTranslation()
+   const [enabled, setEnabled] = useState<boolean | null>(null)
+   const [triggering, setTriggering] = useState(false)
+   const [feedback, setFeedback] = useState<string | null>(null)
+@@ -39,7 +41,7 @@ function StatusBar() {
+       const result = await api.heartbeat.setEnabled(v)
+       setEnabled(result.enabled)
+     } catch {
+-      setError('Failed to toggle heartbeat')
++      setError(t.heartbeat.toggleFailed)
+       setTimeout(() => setError(null), 3000)
+     }
+   }
+@@ -49,7 +51,7 @@ function StatusBar() {
+     setFeedback(null)
+     try {
+       await api.heartbeat.trigger()
+-      setFeedback('Heartbeat triggered!')
++      setFeedback(t.heartbeat.triggered)
+       setTimeout(() => setFeedback(null), 3000)
+     } catch (err) {
+       setFeedback(err instanceof Error ? err.message : 'Trigger failed')
+@@ -65,10 +67,8 @@ function StatusBar() {
+         <div className="flex items-center gap-3">
+           <span className="text-lg">💓</span>
+           <div>
+-            <div className="text-sm font-medium text-text">Heartbeat</div>
+-            <div className="text-xs text-text-muted">
+-              Periodic self-check and autonomous thinking
+-            </div>
++            <div className="text-sm font-medium text-text">{t.heartbeat.heartbeat}</div>
++            <div className="text-xs text-text-muted">{t.heartbeat.heartbeatDesc}</div>
+           </div>
+         </div>
+ 
+@@ -86,7 +86,7 @@ function StatusBar() {
+             disabled={triggering}
+             className="btn-secondary-sm"
+           >
+-            {triggering ? 'Triggering...' : 'Trigger Now'}
++            {triggering ? t.heartbeat.triggering : t.heartbeat.triggerNow}
+           </button>
+ 
+           {enabled !== null && (
+@@ -101,6 +101,7 @@ function StatusBar() {
+ // ==================== Config Form ====================
+ 
+ function HeartbeatConfigForm({ config }: { config: AppConfig }) {
++  const { t } = useTranslation()
+   const [every, setEvery] = useState(config.heartbeat?.every || '30m')
+   const [ahEnabled, setAhEnabled] = useState(config.heartbeat?.activeHours != null)
+   const [ahStart, setAhStart] = useState(config.heartbeat?.activeHours?.start || '09:00')
+@@ -120,8 +121,8 @@ function HeartbeatConfigForm({ config }: { config: AppConfig }) {
+   const { status, retry } = useAutoSave({ data: configData, save })
+ 
+   return (
+-    <ConfigSection title="Configuration" description="Set how often the heartbeat runs and optionally restrict it to active hours.">
+-      <Field label="Interval">
++    <ConfigSection title={t.heartbeat.configuration} description={t.heartbeat.configurationDesc}>
++      <Field label={t.heartbeat.interval}>
+         <input
+           className={inputClass}
+           value={every}
+@@ -132,13 +133,13 @@ function HeartbeatConfigForm({ config }: { config: AppConfig }) {
+ 
+       <div className="mb-3">
+         <div className="flex items-center justify-between mb-2">
+-          <label className="text-[13px] text-text font-medium">Active Hours</label>
++          <label className="text-[13px] text-text font-medium">{t.heartbeat.activeHours}</label>
+           <Toggle checked={ahEnabled} onChange={setAhEnabled} />
+         </div>
+         {ahEnabled && (
+           <div className="flex gap-2 items-end">
+             <div className="flex-1">
+-              <label className="block text-[11px] text-text-muted mb-1">Start</label>
++              <label className="block text-[11px] text-text-muted mb-1">{t.heartbeat.start}</label>
+               <input
+                 className={inputClass}
+                 value={ahStart}
+@@ -147,7 +148,7 @@ function HeartbeatConfigForm({ config }: { config: AppConfig }) {
+               />
+             </div>
+             <div className="flex-1">
+-              <label className="block text-[11px] text-text-muted mb-1">End</label>
++              <label className="block text-[11px] text-text-muted mb-1">{t.heartbeat.end}</label>
+               <input
+                 className={inputClass}
+                 value={ahEnd}
+@@ -156,7 +157,7 @@ function HeartbeatConfigForm({ config }: { config: AppConfig }) {
+               />
+             </div>
+             <div className="flex-1">
+-              <label className="block text-[11px] text-text-muted mb-1">Timezone</label>
++              <label className="block text-[11px] text-text-muted mb-1">{t.heartbeat.timezone}</label>
+               <select
+                 className={inputClass}
+                 value={ahTimezone}
+@@ -187,6 +188,7 @@ function HeartbeatConfigForm({ config }: { config: AppConfig }) {
+ // ==================== Prompt Editor ====================
+ 
+ function PromptEditor() {
++  const { t } = useTranslation()
+   const [content, setContent] = useState('')
+   const [filePath, setFilePath] = useState('')
+   const [loading, setLoading] = useState(true)
+@@ -201,7 +203,7 @@ function PromptEditor() {
+         setContent(content)
+         setFilePath(path)
+       })
+-      .catch(() => setError('Failed to load prompt file'))
++      .catch(() => setError(t.heartbeat.loadFailed))
+       .finally(() => setLoading(false))
+   }, [])
+ 
+@@ -215,16 +217,16 @@ function PromptEditor() {
+       setSaved(true)
+       setTimeout(() => setSaved(false), 2000)
+     } catch {
+-      setError('Failed to save')
++      setError(t.heartbeat.saveFailed)
+     } finally {
+       setSaving(false)
+     }
+   }
+ 
+   return (
+-    <ConfigSection title="Prompt File" description={filePath || 'The prompt template used for each heartbeat cycle.'}>
++    <ConfigSection title={t.heartbeat.promptFile} description={filePath || t.heartbeat.promptFileDesc}>
+       {loading ? (
+-        <div className="text-sm text-text-muted">Loading...</div>
++        <div className="text-sm text-text-muted">{t.heartbeat.loading}</div>
+       ) : (
+         <>
+           <textarea
+@@ -238,12 +240,12 @@ function PromptEditor() {
+               disabled={saving || !dirty}
+               className="btn-primary-sm"
+             >
+-              {saving ? 'Saving...' : 'Save'}
++              {saving ? t.heartbeat.saving : 'Save'}
+             </button>
+             {saved && (
+               <span className="inline-flex items-center gap-1.5 text-[11px]">
+                 <span className="w-1.5 h-1.5 rounded-full bg-green" />
+-                <span className="text-text-muted">Saved</span>
++                <span className="text-text-muted">{t.heartbeat.saved}</span>
+               </span>
+             )}
+             {error && (
+@@ -253,7 +255,7 @@ function PromptEditor() {
+               </span>
+             )}
+             {dirty && !saved && !error && (
+-              <span className="text-[11px] text-text-muted">Unsaved changes</span>
++              <span className="text-[11px] text-text-muted">{t.heartbeat.unsavedChanges}</span>
+             )}
+           </div>
+         </>
+@@ -265,6 +267,7 @@ function PromptEditor() {
+ // ==================== Recent Events ====================
+ 
+ function RecentEvents() {
++  const { t } = useTranslation()
+   const [entries, setEntries] = useState<EventLogEntry[]>([])
+   const [loading, setLoading] = useState(true)
+ 
+@@ -282,20 +285,20 @@ function RecentEvents() {
+   }, [])
+ 
+   return (
+-    <Section title="Recent Events">
++    <Section title={t.heartbeat.recentEvents}>
+       <div className="bg-bg rounded-lg border border-border overflow-x-auto font-mono text-xs">
+         {loading ? (
+-          <div className="px-4 py-6 text-center text-text-muted">Loading...</div>
++          <div className="px-4 py-6 text-center text-text-muted">{t.heartbeat.loading}</div>
+         ) : entries.length === 0 ? (
+-          <div className="px-4 py-6 text-center text-text-muted">No heartbeat events yet</div>
++          <div className="px-4 py-6 text-center text-text-muted">{t.heartbeat.noHeartbeatEvents}</div>
+         ) : (
+           <table className="w-full">
+             <thead className="bg-bg-secondary">
+               <tr className="text-text-muted text-left">
+                 <th className="px-3 py-2 w-12">#</th>
+-                <th className="px-3 py-2 w-36">Time</th>
+-                <th className="px-3 py-2 w-32">Type</th>
+-                <th className="px-3 py-2">Payload</th>
++                <th className="px-3 py-2 w-36">{t.agentStatus.time}</th>
++                <th className="px-3 py-2 w-32">{t.agentStatus.status}</th>
++                <th className="px-3 py-2">{t.agentStatus.input}</th>
+               </tr>
+             </thead>
+             <tbody>
+@@ -325,6 +328,7 @@ function RecentEvents() {
+ // ==================== Main Page ====================
+ 
+ export function HeartbeatPage() {
++  const { t } = useTranslation()
+   const [config, setConfig] = useState<AppConfig | null>(null)
+ 
+   useEffect(() => {
+@@ -333,7 +337,7 @@ export function HeartbeatPage() {
+ 
+   return (
+     <div className="flex flex-col flex-1 min-h-0">
+-      <PageHeader title="Heartbeat" />
++      <PageHeader title={t.heartbeat.title} />
+ 
+       <div className="flex-1 overflow-y-auto px-4 md:px-8 py-5">
+         <div className="max-w-[880px] mx-auto space-y-6">
