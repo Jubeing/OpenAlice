@@ -1,0 +1,204 @@
+diff --git a/ui/src/pages/DevPage.tsx b/ui/src/pages/DevPage.tsx
+index 682d3ae..68e28fc 100644
+--- a/ui/src/pages/DevPage.tsx
++++ b/ui/src/pages/DevPage.tsx
+@@ -3,6 +3,7 @@ import { Section } from '../components/form'
+ import { PageHeader } from '../components/PageHeader'
+ import { Spinner, EmptyState } from '../components/StateViews'
+ import { useToast } from '../components/Toast'
++import { useTranslation } from '../i18n'
+ import {
+   devApi,
+   type RegistryResponse,
+@@ -10,9 +11,10 @@ import {
+ } from '../api/dev'
+ 
+ export function DevPage() {
++  const { t } = useTranslation()
+   return (
+     <div className="flex flex-col flex-1 min-h-0">
+-      <PageHeader title="Dev" />
++      <PageHeader title={t.dev.title} />
+ 
+       <div className="flex-1 overflow-y-auto px-4 md:px-6 py-5">
+         <div className="max-w-[640px] space-y-5">
+@@ -28,6 +30,7 @@ export function DevPage() {
+ // ==================== Registry ====================
+ 
+ function RegistrySection() {
++  const { t } = useTranslation()
+   const [data, setData] = useState<RegistryResponse | null>(null)
+ 
+   const refresh = useCallback(() => {
+@@ -37,28 +40,28 @@ function RegistrySection() {
+   useEffect(() => { refresh() }, [refresh])
+ 
+   return (
+-    <Section title="Connector Registry" description="Active connectors and last user interaction.">
++    <Section title={t.dev.registry} description={t.dev.registryDesc}>
+       <div className="flex items-center gap-2 mb-3">
+         <button
+           onClick={refresh}
+           className="px-2.5 py-1 text-xs bg-bg-tertiary text-text-muted rounded hover:text-text transition-colors"
+         >
+-          Refresh
++          {t.dev.refresh}
+         </button>
+       </div>
+ 
+       {data && (
+         <div className="space-y-2">
+           {data.connectors.length === 0 ? (
+-            <p className="text-sm text-text-muted">No connectors registered.</p>
++            <p className="text-sm text-text-muted">{t.dev.noConnectors}</p>
+           ) : (
+             <table className="w-full text-sm">
+               <thead>
+                 <tr className="text-left text-text-muted text-xs">
+-                  <th className="pb-1 pr-3">Channel</th>
+-                  <th className="pb-1 pr-3">To</th>
+-                  <th className="pb-1 pr-3">Push</th>
+-                  <th className="pb-1">Media</th>
++                  <th className="pb-1 pr-3">{t.dev.channel}</th>
++                  <th className="pb-1 pr-3">{t.dev.to}</th>
++                  <th className="pb-1 pr-3">{t.dev.push}</th>
++                  <th className="pb-1">{t.dev.media}</th>
+                 </tr>
+               </thead>
+               <tbody>
+@@ -66,8 +69,8 @@ function RegistrySection() {
+                   <tr key={cn.channel} className="text-text hover:bg-bg-tertiary/30 transition-colors">
+                     <td className="py-0.5 pr-3 font-mono text-xs">{cn.channel}</td>
+                     <td className="py-0.5 pr-3 font-mono text-xs">{cn.to}</td>
+-                    <td className="py-0.5 pr-3">{cn.capabilities.push ? 'yes' : 'no'}</td>
+-                    <td className="py-0.5">{cn.capabilities.media ? 'yes' : 'no'}</td>
++                    <td className="py-0.5 pr-3">{cn.capabilities.push ? t.dev.yes : t.dev.no}</td>
++                    <td className="py-0.5">{cn.capabilities.media ? t.dev.yes : t.dev.no}</td>
+                   </tr>
+                 ))}
+               </tbody>
+@@ -75,14 +78,14 @@ function RegistrySection() {
+           )}
+ 
+           <div className="pt-2 text-xs text-text-muted">
+-            Last interaction:{' '}
++            {t.dev.lastInteraction}{' '}
+             {data.lastInteraction ? (
+               <span className="font-mono">
+                 {data.lastInteraction.channel}:{data.lastInteraction.to}{' '}
+                 ({new Date(data.lastInteraction.ts).toLocaleTimeString()})
+               </span>
+             ) : (
+-              'none'
++              t.dev.none
+             )}
+           </div>
+         </div>
+@@ -94,6 +97,7 @@ function RegistrySection() {
+ // ==================== Test Send ====================
+ 
+ function SendSection() {
++  const { t } = useTranslation()
+   const [channels, setChannels] = useState<string[]>([])
+   const [channel, setChannel] = useState('')
+   const [kind, setKind] = useState<'message' | 'notification'>('notification')
+@@ -129,49 +133,49 @@ function SendSection() {
+   const selectClass = 'px-2.5 py-2 bg-bg text-text border border-border rounded-md text-sm outline-none focus:border-accent'
+ 
+   return (
+-    <Section title="Test Send" description="Send a test message or notification through the connector pipeline.">
++    <Section title={t.dev.testSend} description={t.dev.testSendDesc}>
+       <div className="space-y-3">
+         <div className="flex gap-3">
+           <div className="flex-1">
+-            <label className="block text-[13px] text-text-muted mb-1">Channel</label>
++            <label className="block text-[13px] text-text-muted mb-1">{t.dev.channel}</label>
+             <select
+               value={channel}
+               onChange={(e) => setChannel(e.target.value)}
+               className={selectClass + ' w-full'}
+             >
+-              <option value="">auto (resolveDeliveryTarget)</option>
++              <option value="">{t.dev.channelAuto}</option>
+               {channels.map((ch) => (
+                 <option key={ch} value={ch}>{ch}</option>
+               ))}
+             </select>
+           </div>
+           <div>
+-            <label className="block text-[13px] text-text-muted mb-1">Kind</label>
++            <label className="block text-[13px] text-text-muted mb-1">{t.dev.kind}</label>
+             <select
+               value={kind}
+               onChange={(e) => setKind(e.target.value as typeof kind)}
+               className={selectClass}
+             >
+-              <option value="notification">notification</option>
+-              <option value="message">message</option>
++              <option value="notification">{t.dev.notification}</option>
++              <option value="message">{t.dev.message_noti}</option>
+             </select>
+           </div>
+           <div>
+-            <label className="block text-[13px] text-text-muted mb-1">Source</label>
++            <label className="block text-[13px] text-text-muted mb-1">{t.dev.source}</label>
+             <select
+               value={source}
+               onChange={(e) => setSource(e.target.value as typeof source)}
+               className={selectClass}
+             >
+-              <option value="manual">manual</option>
+-              <option value="heartbeat">heartbeat</option>
+-              <option value="cron">cron</option>
++              <option value="manual">{t.dev.manual}</option>
++              <option value="heartbeat">{t.dev.heartbeat}</option>
++              <option value="cron">{t.dev.cron}</option>
+             </select>
+           </div>
+         </div>
+ 
+         <div>
+-          <label className="block text-[13px] text-text-muted mb-1">Message</label>
++          <label className="block text-[13px] text-text-muted mb-1">{t.dev.message}</label>
+           <textarea
+             value={text}
+             onChange={(e) => setText(e.target.value)}
+@@ -186,7 +190,7 @@ function SendSection() {
+           disabled={sending || !text.trim()}
+           className="btn-primary-sm"
+         >
+-          {sending ? 'Sending...' : 'Send'}
++          {sending ? t.dev.sending : t.dev.send}
+         </button>
+ 
+       </div>
+@@ -197,6 +201,7 @@ function SendSection() {
+ // ==================== Sessions ====================
+ 
+ function SessionsSection() {
++  const { t } = useTranslation()
+   const [sessions, setSessions] = useState<SessionInfo[] | null>(null)
+ 
+   useEffect(() => {
+@@ -210,17 +215,17 @@ function SessionsSection() {
+   }
+ 
+   return (
+-    <Section title="Sessions" description="Active session files on disk.">
++    <Section title={t.dev.sessions} description={t.dev.sessionsDesc}>
+       {sessions === null ? (
+         <div className="flex justify-center py-6"><Spinner size="sm" /></div>
+       ) : sessions.length === 0 ? (
+-        <EmptyState title="No sessions found." />
++        <EmptyState title={t.dev.noSessions} />
+       ) : (
+         <table className="w-full text-sm">
+           <thead>
+             <tr className="text-left text-text-muted text-xs">
+-              <th className="pb-1 pr-3">Session ID</th>
+-              <th className="pb-1 text-right">Size</th>
++              <th className="pb-1 pr-3">{t.dev.sessionId}</th>
++              <th className="pb-1 text-right">{t.dev.size}</th>
+             </tr>
+           </thead>
+           <tbody>
