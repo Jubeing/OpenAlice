@@ -9,6 +9,7 @@
 import { readFileSync, writeFileSync, existsSync, rmSync } from 'fs'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import { execSync } from 'child_process'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(__dirname, '../..')
@@ -35,15 +36,13 @@ const registryPath = resolve(ROOT, 'src/domain/trading/brokers/registry.ts')
 if (existsSync(registryPath)) {
   let content = readFileSync(registryPath, 'utf8')
 
-  // Remove import
   content = content.replace(
     /import \{ LongbridgeBroker \} from '\.\/longbridge\/LongbridgeBroker\.js'\n?/,
     '',
   )
 
-  // Remove registry entry
   content = content.replace(
-    /\n  longbridge: \{[\s\S]*?guardCategory: 'securities',\n  \},\n?/,
+    /\n  longbridge: \{[\s\S]*?guardCategory: 'securities',\n  },\n?/,
     '',
   )
 
@@ -74,6 +73,21 @@ if (rootPkg.dependencies?.longbridge) {
   delete rootPkg.dependencies.longbridge
   writeJson(rootPkgPath, rootPkg)
   console.log('✓ package.json cleaned')
+}
+
+// ---- 5. Remove systemd service ----
+
+console.log('\n🔧 Removing systemd service...')
+const systemdDest = '/etc/systemd/system/openalice.service'
+
+try {
+  execSync('sudo systemctl stop openalice', { stdio: 'pipe' })
+  execSync('sudo systemctl disable openalice', { stdio: 'pipe' })
+  execSync(`sudo rm -f ${systemdDest}`, { stdio: 'pipe' })
+  execSync('sudo systemctl daemon-reload', { stdio: 'pipe' })
+  console.log('✓ systemd service removed')
+} catch (e) {
+  console.log('⚠ Could not remove systemd service:', e.message)
 }
 
 console.log('\n✅ Longbridge broker patch removed successfully!\n')

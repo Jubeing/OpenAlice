@@ -1,0 +1,14 @@
+[Unit]
+Description=OpenAlice
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory={{OPENALICE_ROOT}}
+ExecStart=/usr/bin/node {{OPENALICE_ROOT}}/dist/main.js
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

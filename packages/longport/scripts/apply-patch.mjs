@@ -11,11 +11,13 @@
  *   3. Patches src/domain/trading/brokers/index.ts      (adds longbridge export)
  *   4. Adds longbridge dependency to the root package.json
  *   5. Creates tsup.config.ts for the root build
+ *   6. Installs systemd service (auto-start + crash recovery)
  */
 
 import { readFileSync, writeFileSync, existsSync, cpSync, rmSync, readdirSync } from 'fs'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import { execSync } from 'child_process'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(__dirname, '../..')
@@ -53,7 +55,6 @@ if (!existsSync(resolve(LONGPORT_PKG, 'src'))) {
   process.exit(1)
 }
 
-// Create destination directory if it doesn't exist
 if (!existsSync(LONGBRIDGE_SRC_DEST)) {
   const { mkdirSync } = await import('fs')
   mkdirSync(LONGBRIDGE_SRC_DEST, { recursive: true })
@@ -151,8 +152,39 @@ if (indexContent.includes("'./longbridge'") || indexContent.includes('@traderali
   ])
 }
 
+// ---- Step 6: Install systemd service (auto-start + crash recovery) ----
+
+console.log('\n🔧 Installing systemd service (auto-start + crash recovery)...')
+
+const systemdSrc = resolve(LONGPORT_PKG, 'systemd/openalice.service')
+const systemdDest = '/etc/systemd/system/openalice.service'
+
+if (!existsSync(systemdSrc)) {
+  console.log('⚠ systemd service file not found — skipping')
+} else {
+  let serviceContent = readFileSync(systemdSrc, 'utf8')
+  serviceContent = serviceContent.replace(/\{\{OPENALICE_ROOT\}\}/g, ROOT)
+
+  const tmpPath = '/tmp/openalice.service'
+  writeFileSync(tmpPath, serviceContent)
+
+  try {
+    execSync(`sudo cp ${tmpPath} ${systemdDest}`, { stdio: 'pipe' })
+    execSync('sudo systemctl daemon-reload', { stdio: 'pipe' })
+    execSync('sudo systemctl enable openalice', { stdio: 'pipe' })
+    execSync('sudo systemctl start openalice', { stdio: 'pipe' })
+    console.log('✓ systemd service installed')
+    console.log('  • Status: sudo systemctl status openalice')
+    console.log('  • Logs:   sudo journalctl -u openalice -f')
+  } catch (e) {
+    console.log('⚠ Could not install systemd service (may need sudo):', e.message)
+  }
+}
+
 console.log('\n✅ Longbridge broker patch applied successfully!\n')
 console.log('Next steps:')
 console.log('  1. pnpm install              # install longbridge')
 console.log('  2. pnpm build:backend        # rebuild backend (auto-externals longbridge)')
-console.log('  3. node dist/main.js          # or pnpm dev to run')
+console.log('  3. pnpm build:ui             # rebuild UI')
+console.log('  4. sudo systemctl restart openalice  # reload with new build')
+console.log('\n🎉 All done!')
