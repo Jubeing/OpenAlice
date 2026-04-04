@@ -38,11 +38,8 @@ const UNSET_DECIMAL = new Decimal(0)
 export const LongbridgeBrokerConfigSchema = z.object({
   appKey: z.string().optional(),
   appSecret: z.string().optional(),
-  // OAuth2 refresh_token — used to obtain new access tokens
+  // OAuth2 refresh_token — used to obtain new access tokens AND as the SDK access token
   refreshToken: z.string().optional(),
-  // Current access token — passed to the SDK for API calls
-  // (obtained by refreshing refreshToken, or set directly from OAuth2 exchange)
-  activeAccessToken: z.string().optional(),
   tokenExpiry: z.string().optional(),
   paper: z.boolean().default(true),
 })
@@ -52,8 +49,7 @@ export type LongbridgeBrokerConfig = z.infer<typeof LongbridgeBrokerConfigSchema
 export const longbridgeConfigFields: BrokerConfigField[] = [
   { name: 'appKey', type: 'text', label: 'LONGBRIDGE_APP_KEY', required: true, sensitive: true, description: 'Longbridge App Key from developer portal.' },
   { name: 'appSecret', type: 'password', label: 'LONGBRIDGE_APP_SECRET', required: true, sensitive: true, description: 'Longbridge App Secret.' },
-  { name: 'refreshToken', type: 'password', label: 'LONGBRIDGE_REFRESH_TOKEN', required: true, sensitive: true, description: 'OAuth2 Refresh Token. Use browser re-auth to get a new one if refresh fails.' },
-  { name: 'activeAccessToken', type: 'password', label: 'LONGBRIDGE_ACCESS_TOKEN', required: false, sensitive: true, description: 'Access Token from developer portal (or obtained via Refresh). Auto-filled when Refresh succeeds.' },
+  { name: 'refreshToken', type: 'password', label: 'LONGBRIDGE_ACCESS_TOKEN', required: true, sensitive: true, description: 'OAuth2 Refresh Token. Use Refresh button (or re-authenticate in browser) to renew.' },
   { name: 'paper', type: 'boolean', label: 'Paper Trading', default: true, sensitive: false, description: 'Route orders to paper/sandbox environment.' },
 ]
 
@@ -80,7 +76,6 @@ export class LongbridgeBroker implements IBroker {
       appKey: bc.appKey ?? '',
       appSecret: bc.appSecret ?? '',
       refreshToken: bc.refreshToken ?? '',
-      activeAccessToken: bc.activeAccessToken || undefined,
       tokenExpiry: bc.tokenExpiry,
       paper: bc.paper,
     })
@@ -96,7 +91,7 @@ export class LongbridgeBroker implements IBroker {
 
   constructor(config: {
     id: string; label?: string
-    appKey: string; appSecret: string; refreshToken: string; activeAccessToken?: string
+    appKey: string; appSecret: string; refreshToken: string
     tokenExpiry?: string; paper?: boolean
   }) {
     this.id = config.id
@@ -105,7 +100,6 @@ export class LongbridgeBroker implements IBroker {
       appKey: config.appKey,
       appSecret: config.appSecret,
       refreshToken: config.refreshToken,
-      activeAccessToken: config.activeAccessToken || config.refreshToken,
       tokenExpiry: config.tokenExpiry,
       paper: config.paper ?? true,
     }
@@ -124,7 +118,6 @@ export class LongbridgeBroker implements IBroker {
       refreshToken: this.config.refreshToken ?? '',
     })
     // Store new tokens
-    this.config.activeAccessToken = result.accessToken
     this.config.refreshToken = result.refreshToken
     this.config.tokenExpiry = result.expiresAt
     return result
@@ -133,7 +126,7 @@ export class LongbridgeBroker implements IBroker {
   private async getTradeCtx() {
     if (this._tradeCtx) return this._tradeCtx
     const sdk = await getSDK()
-    const token = this.config.activeAccessToken || this.config.refreshToken || ''
+    const token = this.config.refreshToken || ''
     const cfg = sdk.Config.fromApikey(this.config.appKey!, this.config.appSecret!, token, { language: sdk.Language.ZH_CN })
     this._tradeCtx = sdk.TradeContext.new(cfg)
     return this._tradeCtx
@@ -142,7 +135,7 @@ export class LongbridgeBroker implements IBroker {
   private async getQuoteCtx() {
     if (this._quoteCtx) return this._quoteCtx
     const sdk = await getSDK()
-    const token = this.config.activeAccessToken || this.config.refreshToken || ''
+    const token = this.config.refreshToken || ''
     const cfg = sdk.Config.fromApikey(this.config.appKey!, this.config.appSecret!, token, { language: sdk.Language.ZH_CN })
     this._quoteCtx = sdk.QuoteContext.new(cfg)
     return this._quoteCtx

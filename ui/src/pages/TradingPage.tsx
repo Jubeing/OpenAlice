@@ -302,9 +302,8 @@ function DynamicBrokerFields({ fields, values, showSecrets, onChange, brokerType
         }
         return
       }
-      // Store new tokens: activeAccessToken (used by SDK) and refreshToken (for next refresh)
+      // Store new refresh token (accessToken is obtained by SDK on each request via refresh)
       onChange('refreshToken', result.refreshToken)
-      onChange('activeAccessToken', result.accessToken)
       onChange('tokenExpiry', result.expiresAt)
     } catch (e) {
       setRefreshError(e instanceof Error ? e.message : 'Refresh failed')

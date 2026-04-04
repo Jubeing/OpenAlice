@@ -180,7 +180,7 @@ export function createTradingConfigRoutes(ctx: EngineContext) {
       const tempConfig = {
         id: '__refresh-test__',
         type: 'longbridge' as const,
-        brokerConfig: { appKey, appSecret, refreshToken, activeAccessToken: refreshToken },
+        brokerConfig: { appKey, appSecret, refreshToken },
       }
       let broker: { init: () => Promise<void>; refreshToken: () => Promise<{ accessToken: string; refreshToken: string; expiresAt: string }>; close: () => Promise<void> } | null = null
       try {

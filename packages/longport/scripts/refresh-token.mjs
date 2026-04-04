@@ -5,8 +5,11 @@
  * Auto-refreshes Longbridge OAuth2 refresh tokens for all Longbridge accounts
  * on the 1st of every month (or when manually triggered).
  *
- * Crontab entry (runs on the 1st of every month at 4 AM):
- *   0 4 1 * * cd /home/ubuntu/OpenAlice && node packages/longport/scripts/refresh-token.mjs
+ * Usage:
+ *   node packages/longport/scripts/refresh-token.mjs
+ *
+ * Crontab entry (runs on the 1st of every month at 03:00 Asia/Shanghai):
+ *   0 3 1 * * cd /home/ubuntu/OpenAlice && node packages/longport/scripts/refresh-token.mjs >> ~/.openclaw/logs/longbridge_refresh.log 2>&1
  */
 
 import { readFileSync, writeFileSync, existsSync } from 'fs'
@@ -79,7 +82,7 @@ async function main() {
 
   let changed = false
   for (const account of longbridgeAccounts) {
-    const { appKey, appSecret, refreshToken, activeAccessToken } = account.brokerConfig
+    const { appKey, appSecret, refreshToken } = account.brokerConfig
     if (!appKey || !appSecret || !refreshToken) {
       console.warn(`Skipping ${account.id}: missing appKey, appSecret, or refreshToken`)
       continue
@@ -90,12 +93,12 @@ async function main() {
       const result = await refreshAccessToken({ appKey, appSecret, refreshToken })
 
       // Update brokerConfig with new tokens
-      account.brokerConfig.activeAccessToken = result.accessToken
+      // activeAccessToken is no longer stored; SDK uses refreshToken directly
       account.brokerConfig.refreshToken = result.refreshToken
       account.brokerConfig.tokenExpiry = result.expiresAt
 
       changed = true
-      console.log(`✓ ${account.id}: token refreshed, expires ${result.expiresAt}`)
+      console.log(`✓ ${account.id}: token refreshed (new refresh token stored), expires ${result.expiresAt}`)
     } catch (err) {
       console.error(`✗ ${account.id}: refresh failed — ${err.message}`)
       console.error('  Hint: If error is "invalid_grant", the refresh token is invalid/revoked.')
