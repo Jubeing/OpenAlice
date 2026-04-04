@@ -1,0 +1,7 @@
+{
+  "appKey": "YOUR_LONGPORT_APP_KEY",
+  "appSecret": "YOUR_LONGPORT_APP_SECRET",
+  "accessToken": "YOUR_LONGPORT_ACCESS_TOKEN",
+  "paper": true,
+  "port": 3004
+}

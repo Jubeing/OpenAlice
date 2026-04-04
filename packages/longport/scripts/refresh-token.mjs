@@ -2,60 +2,110 @@
 /**
  * Longbridge token refresh cron script.
  *
- * Run this via crontab to auto-refresh Longbridge tokens every 90 days.
+ * Auto-refreshes Longbridge OAuth2 refresh tokens for all Longbridge accounts
+ * on the 1st of every month (or when manually triggered).
  *
  * Crontab entry (runs on the 1st of every month at 4 AM):
  *   0 4 1 * * cd /home/ubuntu/OpenAlice && node packages/longport/scripts/refresh-token.mjs
- *
- * Alternatively, call `api.trading.refreshLongPortToken(accountId)` via the MCP tool interface.
  */
 
 import { readFileSync, writeFileSync, existsSync } from 'fs'
-import { resolve, dirname } from 'path'
-import { fileURLToPath } from 'url'
+import { resolve } from 'path'
+import https from 'https'
 
-const __dirname = dirname(fileURLToPath(import.meta.url))
-const ROOT = resolve(__dirname, '../..')
+const ROOT = process.env.ALICE_ROOT || '/home/ubuntu/OpenAlice'
+
+async function refreshAccessToken({ appKey, appSecret, refreshToken }) {
+  const params = new URLSearchParams({
+    grant_type: 'refresh_token',
+    client_id: appKey,
+    ...(appSecret ? { client_secret: appSecret } : {}),
+    refresh_token: refreshToken,
+  })
+
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      {
+        hostname: 'openapi.longbridge.com',
+        path: '/oauth2/token',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Length': Buffer.byteLength(params.toString()),
+        },
+      },
+      (res) => {
+        let data = ''
+        res.on('data', c => data += c)
+        res.on('end', () => {
+          try {
+            const result = JSON.parse(data)
+            if (!result.access_token) {
+              reject(new Error(`Token refresh failed (code=${result.code}): ${result.msg ?? 'Unknown'}`))
+            } else {
+              const expiresAt = new Date(Date.now() + (result.expires_in ?? 2592000) * 1000).toISOString()
+              resolve({
+                accessToken: result.access_token,
+                refreshToken: result.refresh_token ?? refreshToken,
+                expiresAt,
+              })
+            }
+          } catch {
+            reject(new Error(`Invalid JSON: ${data}`))
+          }
+        })
+      },
+    )
+    req.on('error', reject)
+    req.write(params.toString())
+    req.end()
+  })
+}
 
 async function main() {
   const accountsPath = resolve(ROOT, 'data/config/accounts.json')
   if (!existsSync(accountsPath)) {
-    console.error('accounts.json not found')
+    console.error('accounts.json not found at:', accountsPath)
     process.exit(1)
   }
 
   const accounts = JSON.parse(readFileSync(accountsPath, 'utf8'))
-  const longbridgeAccounts = accounts.filter((a) => a.type === 'longbridge' && a.brokerConfig?.autoRefresh)
+  const longbridgeAccounts = accounts.filter((a) => a.type === 'longbridge')
 
   if (longbridgeAccounts.length === 0) {
-    console.log('No Longbridge accounts with auto-refresh enabled.')
+    console.log('No Longbridge accounts found.')
     return
   }
 
-  const { refreshAccessToken } = await import('../src/longbridge-auth.js').catch(() => {
-    // Try built dist
-    return import('../../packages/longport/dist/longbridge-auth.js')
-  })
-
+  let changed = false
   for (const account of longbridgeAccounts) {
-    const { appKey, appSecret, accessToken } = account.brokerConfig
-    if (!appKey || !appSecret || !accessToken) {
-      console.warn(`Skipping ${account.id}: missing credentials`)
+    const { appKey, appSecret, refreshToken, activeAccessToken } = account.brokerConfig
+    if (!appKey || !appSecret || !refreshToken) {
+      console.warn(`Skipping ${account.id}: missing appKey, appSecret, or refreshToken`)
       continue
     }
 
     try {
       console.log(`Refreshing token for ${account.id}...`)
-      const { token, expiredAt } = await refreshAccessToken({ appKey, appSecret, accessToken })
+      const result = await refreshAccessToken({ appKey, appSecret, refreshToken })
 
-      account.brokerConfig.accessToken = token
-      account.brokerConfig.tokenExpiry = expiredAt
+      // Update brokerConfig with new tokens
+      account.brokerConfig.activeAccessToken = result.accessToken
+      account.brokerConfig.refreshToken = result.refreshToken
+      account.brokerConfig.tokenExpiry = result.expiresAt
 
-      writeFileSync(accountsPath, JSON.stringify(accounts, null, 2))
-      console.log(`✓ ${account.id}: token refreshed, expires ${expiredAt}`)
+      changed = true
+      console.log(`✓ ${account.id}: token refreshed, expires ${result.expiresAt}`)
     } catch (err) {
       console.error(`✗ ${account.id}: refresh failed — ${err.message}`)
+      console.error('  Hint: If error is "invalid_grant", the refresh token is invalid/revoked.')
+      console.error('  Solution: Re-run OAuth2 authorization to get a new refresh token.')
     }
+  }
+
+  if (changed) {
+    writeFileSync(accountsPath, JSON.stringify(accounts, null, 2))
+    console.log('\nAccounts updated.')
   }
 
   console.log('\nToken refresh complete.')

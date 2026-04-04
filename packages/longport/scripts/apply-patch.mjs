@@ -1,36 +1,52 @@
 #!/usr/bin/env node
 /**
- * Longbridge broker patch installer for OpenAlice.
+ * Alice-Longbridge patch installer for OpenAlice.
  *
  * Run from the OpenAlice root directory:
- *   node packages/longport/scripts/apply-patch.mjs
+ *   ALICE_LONGBRIDGE_ROOT=/path/to/Alice-Longbridge node packages/longport/scripts/apply-patch.mjs
  *
  * This script:
- *   1. Copies broker files to src/domain/trading/brokers/longbridge/
- *   2. Patches src/domain/trading/brokers/registry.ts  (adds longbridge entry)
- *   3. Patches src/domain/trading/brokers/index.ts      (adds longbridge export)
- *   4. Adds longbridge dependency to the root package.json
- *   5. Creates tsup.config.ts for the root build
- *   6. Installs systemd service (auto-start + crash recovery)
+ *   1. Copies all Alice-Longbridge packages to OpenAlice/packages/ (workspace packages)
+ *   2. Applies i18n patches (ui translations)
+ *   3. Patches src/domain/trading/brokers/registry.ts  (adds longbridge entry)
+ *   4. Patches src/domain/trading/brokers/index.ts      (adds longbridge export)
+ *   5. Installs systemd service (auto-start + crash recovery)
  */
 
-import { readFileSync, writeFileSync, existsSync, cpSync, rmSync, readdirSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync, cpSync, rmSync, readdirSync, mkdirSync } from 'fs'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { execSync } from 'child_process'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const ROOT = resolve(__dirname, '../..')
+const ROOT = process.cwd()
 const LONGPORT_PKG = resolve(__dirname, '..')
-const LONGBRIDGE_SRC_DEST = resolve(ROOT, 'src/domain/trading/brokers/longbridge')
 
-function readJson(path) {
-  return JSON.parse(readFileSync(path, 'utf8'))
+// ---- Find Alice-Longbridge root ----
+function findAliceLongbridge() {
+  const candidates = [
+    process.env.ALICE_LONGBRIDGE_ROOT,
+    resolve(__dirname, '../../..'),
+    '/home/ubuntu/.openclaw/workspace/Alice-Longbridge',
+    resolve(ROOT, '../Alice-Longbridge'),
+  ]
+  for (const c of candidates) {
+    if (c && existsSync(resolve(c, 'packages'))) return c
+  }
+  return null
 }
 
-function writeJson(path, obj) {
-  writeFileSync(path, JSON.stringify(obj, null, 2) + '\n')
+const ALICE_LONGBRIDGE_ROOT = findAliceLongbridge()
+if (!ALICE_LONGBRIDGE_ROOT) {
+  console.error('❌ Could not find Alice-Longbridge source (tried common locations)')
+  console.error('   Set ALICE_LONGBRIDGE_ROOT env var to point to Alice-Longbridge root')
+  process.exit(1)
 }
+console.log(`   Alice-Longbridge root: ${ALICE_LONGBRIDGE_ROOT}`)
+
+const ALICE_PKGS_SRC = resolve(ALICE_LONGBRIDGE_ROOT, 'packages')
+
+// ---- Helpers ----
 
 function patchFile(filePath, patches) {
   let content = readFileSync(filePath, 'utf8')
@@ -46,59 +62,53 @@ function patchFile(filePath, patches) {
   console.log(`✓ Patched ${filePath}`)
 }
 
-console.log('\n📦 Installing Longbridge broker patch...\n')
-
-// ---- Step 1: Copy broker files to src/ ----
-
-if (!existsSync(resolve(LONGPORT_PKG, 'src'))) {
-  console.error('❌ Source files not found in packages/longport/src')
-  process.exit(1)
+function copyPackage(src, dest) {
+  if (!existsSync(dest)) mkdirSync(dest, { recursive: true })
+  const files = readdirSync(src).filter(f => f !== 'node_modules' && f !== 'dist')
+  for (const f of files) {
+    cpSync(resolve(src, f), resolve(dest, f), { force: true, recursive: true })
+  }
+  const srcName = src.split('/').slice(-2).join('/')
+  const destName = dest.split('/').slice(-2).join('/')
+  console.log(`  ✓ ${srcName} → ${destName}`)
 }
 
-if (!existsSync(LONGBRIDGE_SRC_DEST)) {
-  const { mkdirSync } = await import('fs')
-  mkdirSync(LONGBRIDGE_SRC_DEST, { recursive: true })
+// ---- Main ----
+
+console.log('\n📦 Installing Alice-Longbridge patch (workspace packages)...\n')
+
+// ---- Step 1: Copy all Alice-Longbridge packages to OpenAlice/packages/ ----
+
+console.log('🔧 Copying Alice-Longbridge packages to packages/...')
+
+// NOTE: longport-mcp is now merged INTO longport (under mcp/ subdirectory).
+// Only copy packages that exist in Alice-Longbridge.
+const patchPackages = ['i18n', 'longport', 'opentypebb', 'ibkr']
+for (const pkg of patchPackages) {
+  const src = resolve(ALICE_PKGS_SRC, pkg)
+  const dest = resolve(ROOT, 'packages', pkg)
+  if (!existsSync(src)) {
+    console.log(`  ⚠ ${pkg} not found in Alice-Longbridge/packages/ — skipping`)
+    continue
+  }
+  copyPackage(src, dest)
 }
 
-const srcFiles = readdirSync(resolve(LONGPORT_PKG, 'src'))
-for (const f of srcFiles) {
-  cpSync(resolve(LONGPORT_PKG, 'src', f), resolve(LONGBRIDGE_SRC_DEST, f), { force: true })
-}
-console.log(`✓ Copied ${srcFiles.length} source files to src/domain/trading/brokers/longbridge/`)
+// ---- Step 2: Apply i18n patches ----
 
-// ---- Step 2: Add longbridge to root dependencies ----
-
-console.log('\n🔧 Adding longbridge dependency...')
-const rootPkg = readJson(resolve(ROOT, 'package.json'))
-
-if (!rootPkg.dependencies?.longbridge) {
-  rootPkg.dependencies = { ...rootPkg.dependencies, longbridge: '^4.0.0' }
-}
-
-writeJson(resolve(ROOT, 'package.json'), rootPkg)
-console.log('✓ package.json updated')
-
-// ---- Step 3: Create root tsup.config.ts ----
-
-const tsupPath = resolve(ROOT, 'tsup.config.ts')
-const tsupContent = `import { defineConfig } from 'tsup'
-
-export default defineConfig({
-  entry: ['src/main.ts'],
-  format: ['esm'],
-  dts: true,
-  sourcemap: true,
-  target: 'node20',
-  external: ['longbridge', 'sharp'],
-})
-`
-
-if (!existsSync(tsupPath)) {
-  writeFileSync(tsupPath, tsupContent)
-  console.log('✓ Created tsup.config.ts')
+console.log('\n🔧 Applying i18n patches...')
+const i18nScript = resolve(ALICE_PKGS_SRC, 'i18n/scripts/apply-patch.mjs')
+if (existsSync(i18nScript)) {
+  try {
+    execSync(`node ${i18nScript}`, { cwd: ROOT, stdio: 'inherit' })
+  } catch (e) {
+    console.log('⚠ i18n patch script failed — continuing...')
+  }
+} else {
+  console.log('  ⚠ i18n/scripts/apply-patch.mjs not found — skipping')
 }
 
-// ---- Step 4: Patch registry.ts ----
+// ---- Step 3: Patch broker registry ----
 
 console.log('\n🔧 Patching broker registry...')
 const registryPath = resolve(ROOT, 'src/domain/trading/brokers/registry.ts')
@@ -135,7 +145,7 @@ if (registryContent.includes("'longbridge'")) {
   console.log('✓ registry.ts patched')
 }
 
-// ---- Step 5: Patch index.ts ----
+// ---- Step 4: Patch broker index ----
 
 console.log('\n🔧 Patching broker index...')
 const indexPath = resolve(ROOT, 'src/domain/trading/brokers/index.ts')
@@ -152,7 +162,7 @@ if (indexContent.includes("'./longbridge'") || indexContent.includes('@traderali
   ])
 }
 
-// ---- Step 6: Install systemd service (auto-start + crash recovery) ----
+// ---- Step 5: Install systemd service (auto-start + crash recovery) ----
 
 console.log('\n🔧 Installing systemd service (auto-start + crash recovery)...')
 
@@ -164,6 +174,8 @@ if (!existsSync(systemdSrc)) {
 } else {
   let serviceContent = readFileSync(systemdSrc, 'utf8')
   serviceContent = serviceContent.replace(/\{\{OPENALICE_ROOT\}\}/g, ROOT)
+  // MCP server is now at packages/longport/dist-mcp/index.js (merged into longport package)
+  serviceContent = serviceContent.replace(/\{\{LONGBRIDGE_MCP_ROOT\}\}/g, resolve(ROOT, 'packages/longport/dist-mcp'))
 
   const tmpPath = '/tmp/openalice.service'
   writeFileSync(tmpPath, serviceContent)
@@ -181,10 +193,9 @@ if (!existsSync(systemdSrc)) {
   }
 }
 
-console.log('\n✅ Longbridge broker patch applied successfully!\n')
+console.log('\n✅ Alice-Longbridge patch applied successfully!\n')
 console.log('Next steps:')
-console.log('  1. pnpm install              # install longbridge')
-console.log('  2. pnpm build:backend        # rebuild backend (auto-externals longbridge)')
-console.log('  3. pnpm build:ui             # rebuild UI')
-console.log('  4. sudo systemctl restart openalice  # reload with new build')
+console.log('  1. pnpm install                  # install all dependencies')
+console.log('  2. pnpm build                    # build everything (broker + MCP)')
+console.log('  3. sudo systemctl restart openalice   # reload with new build')
 console.log('\n🎉 All done!')

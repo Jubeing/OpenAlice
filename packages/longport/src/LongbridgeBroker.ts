@@ -26,7 +26,7 @@ import {
   Order,
   OrderState,
 } from '@traderalice/ibkr'
-import { refreshAccessToken, isTokenExpiringSoon } from './longbridge-auth.js'
+import { refreshAccessToken } from './longbridge-auth.js'
 import { makeContract, resolveSymbol, makeContractDetails, mapAction, mapStatus } from './longbridge-contracts.js'
 import type { LongPortAccountAsset, LongPortPosition, LongPortOrder, LongPortQuote, LongPortSubmitOrderResponse, LongPortOrderDetail } from './longbridge-types.js'
 
@@ -39,7 +39,6 @@ export const LongbridgeBrokerConfigSchema = z.object({
   appKey: z.string().optional(),
   appSecret: z.string().optional(),
   accessToken: z.string().optional(),
-  autoRefresh: z.boolean().default(false),
   tokenExpiry: z.string().optional(),
   paper: z.boolean().default(true),
 })
@@ -49,8 +48,7 @@ export type LongbridgeBrokerConfig = z.infer<typeof LongbridgeBrokerConfigSchema
 export const longbridgeConfigFields: BrokerConfigField[] = [
   { name: 'appKey', type: 'text', label: 'LONGBRIDGE_APP_KEY', required: true, sensitive: true, description: 'Longbridge App Key from developer portal.' },
   { name: 'appSecret', type: 'password', label: 'LONGBRIDGE_APP_SECRET', required: true, sensitive: true, description: 'Longbridge App Secret.' },
-  { name: 'accessToken', type: 'password', label: 'LONGBRIDGE_ACCESS_TOKEN', required: true, sensitive: true, description: 'Access Token. Turn on Auto-refresh to renew automatically every 90 days.' },
-  { name: 'autoRefresh', type: 'boolean', label: 'Auto-refresh Token', default: false, sensitive: false, description: 'Auto-refresh token every 90 days using HMAC-SHA256.' },
+  { name: 'accessToken', type: 'password', label: 'LONGBRIDGE_ACCESS_TOKEN', required: true, sensitive: true, description: 'Access Token. Automatically refreshed on the 1st of each month.' },
   { name: 'paper', type: 'boolean', label: 'Paper Trading', default: true, sensitive: false, description: 'Route orders to paper/sandbox environment.' },
 ]
 
@@ -77,7 +75,6 @@ export class LongbridgeBroker implements IBroker {
       appKey: bc.appKey ?? '',
       appSecret: bc.appSecret ?? '',
       accessToken: bc.accessToken ?? '',
-      autoRefresh: bc.autoRefresh,
       tokenExpiry: bc.tokenExpiry,
       paper: bc.paper,
     })
@@ -94,7 +91,7 @@ export class LongbridgeBroker implements IBroker {
   constructor(config: {
     id: string; label?: string
     appKey: string; appSecret: string; accessToken: string
-    autoRefresh?: boolean; tokenExpiry?: string; paper?: boolean
+    tokenExpiry?: string; paper?: boolean
   }) {
     this.id = config.id
     this.label = config.label ?? 'Longbridge'
@@ -102,7 +99,6 @@ export class LongbridgeBroker implements IBroker {
       appKey: config.appKey,
       appSecret: config.appSecret,
       accessToken: config.accessToken,
-      autoRefresh: config.autoRefresh ?? false,
       tokenExpiry: config.tokenExpiry,
       paper: config.paper ?? true,
     }
@@ -112,14 +108,8 @@ export class LongbridgeBroker implements IBroker {
     return { appKey: this.config.appKey ?? '', appSecret: this.config.appSecret ?? '', accessToken: this.config.accessToken ?? '' }
   }
 
-  private async ensureValidToken(): Promise<void> {
-    if (!this.config.autoRefresh || !this.config.tokenExpiry) return
-    if (!isTokenExpiringSoon(this.config.tokenExpiry, 7)) return
-    const result = await refreshAccessToken(this.auth)
-    this.config.accessToken = result.token
-    this.config.tokenExpiry = result.expiredAt
-    console.log(`LongbridgeBroker[${this.id}]: token auto-refreshed, expires ${result.expiredAt}`)
-  }
+  // Token refresh is handled by monthly cron script (refresh-token.mjs)
+  // Manual refresh available via refreshToken() for UI button
 
   async refreshToken(): Promise<{ token: string; expiredAt: string }> {
     const result = await refreshAccessToken(this.auth)

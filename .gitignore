@@ -1,5 +1,33 @@
 node_modules/
 dist/
-.env
+logs/
+/data/*
+state.json
 *.log
+
+.env
+.env.*
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Build cache
+*.tsbuildinfo
+
+# Test
+coverage/
+
+# Claude Code
+.claude/
+packages/ibkr/ref/source/JavaClient/
+packages/ibkr/ref/source/cppclient/
+packages/ibkr/ref/samples/Java/
+packages/ibkr/ref/samples/Cpp/
+packages/ibkr/ref/CMakeLists.txt
