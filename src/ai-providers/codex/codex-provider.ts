@@ -168,7 +168,15 @@ export class CodexProvider implements AIProvider {
           yield { type: 'done', result: { text: errorText, media: [] } }
           return
         }
-        logger.error({ err: err?.message, status: err?.status }, 'responses_api_error')
+        logger.error({
+          err: err?.message,
+          status: err?.status,
+          headers: err?.headers,
+          body: err?.error ?? err?.body,
+          model,
+          inputItems: input.length,
+          toolCount: tools.length,
+        }, 'responses_api_error')
         const errorText = accumulatedText + stepText +
           `\n\n[Codex API error: ${err?.message ?? 'unknown error'}]`
         yield { type: 'done', result: { text: errorText, media: [] } }
