@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { api, type Profile, type AIBackend, type Preset } from '../api'
+import { api, type Profile, type AIBackend, type Preset, type JsonSchemaProperty } from '../api'
 import { SaveIndicator } from '../components/SaveIndicator'
 import { Field, inputClass } from '../components/form'
 import type { SaveStatus } from '../hooks/useAutoSave'
@@ -32,20 +32,15 @@ export function AIProviderPage() {
   }, [])
 
   const handleSetActive = async (slug: string) => {
-    try {
-      await api.config.setActiveProfile(slug)
-      setActiveProfile(slug)
-    } catch {}
+    try { await api.config.setActiveProfile(slug); setActiveProfile(slug) } catch {}
   }
 
   const handleDelete = async (slug: string) => {
     if (!profiles) return
     try {
       await api.config.deleteProfile(slug)
-      const updated = { ...profiles }
-      delete updated[slug]
-      setProfiles(updated)
-      setEditingSlug(null)
+      const updated = { ...profiles }; delete updated[slug]
+      setProfiles(updated); setEditingSlug(null)
     } catch {}
   }
 
@@ -67,17 +62,10 @@ export function AIProviderPage() {
       <PageHeader title="AI Provider" description="Manage AI provider profiles." />
       <div className="flex-1 overflow-y-auto px-4 md:px-8 py-6">
         <div className="max-w-[640px] mx-auto space-y-3">
-
-          {/* Profile List */}
           {Object.entries(profiles).map(([slug, profile]) => {
             const isActive = slug === activeProfile
             return (
-              <div
-                key={slug}
-                className={`flex items-center gap-3 p-4 rounded-xl border transition-all ${
-                  isActive ? 'border-accent bg-accent-dim/20' : 'border-border bg-bg'
-                }`}
-              >
+              <div key={slug} className={`flex items-center gap-3 p-4 rounded-xl border transition-all ${isActive ? 'border-accent bg-accent-dim/20' : 'border-border bg-bg'}`}>
                 <div className="text-text-muted">{BACKEND_ICONS[profile.backend]}</div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -87,57 +75,24 @@ export function AIProviderPage() {
                   <p className="text-[11px] text-text-muted truncate">{profile.model || 'Auto (subscription plan)'}</p>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
-                  {!isActive && (
-                    <button
-                      onClick={() => handleSetActive(slug)}
-                      className="text-[11px] px-2 py-1 rounded-md border border-border text-text-muted hover:text-accent hover:border-accent transition-colors"
-                    >
-                      Set Default
-                    </button>
-                  )}
-                  <button
-                    onClick={() => setEditingSlug(slug)}
-                    className="text-[11px] px-2 py-1 rounded-md border border-border text-text-muted hover:text-text hover:bg-bg-tertiary transition-colors"
-                  >
-                    Edit
-                  </button>
+                  {!isActive && <button onClick={() => handleSetActive(slug)} className="text-[11px] px-2 py-1 rounded-md border border-border text-text-muted hover:text-accent hover:border-accent transition-colors">Set Default</button>}
+                  <button onClick={() => setEditingSlug(slug)} className="text-[11px] px-2 py-1 rounded-md border border-border text-text-muted hover:text-text hover:bg-bg-tertiary transition-colors">Edit</button>
                 </div>
               </div>
             )
           })}
-
-          {/* New Profile Button */}
-          <button
-            onClick={() => setShowCreate(true)}
-            className="w-full p-4 rounded-xl border-2 border-dashed border-border text-text-muted hover:border-accent/50 hover:text-accent transition-all text-[13px] font-medium"
-          >
-            + New Profile
-          </button>
-
+          <button onClick={() => setShowCreate(true)} className="w-full p-4 rounded-xl border-2 border-dashed border-border text-text-muted hover:border-accent/50 hover:text-accent transition-all text-[13px] font-medium">+ New Profile</button>
         </div>
       </div>
 
-      {/* Edit Modal */}
       {editingSlug && profiles[editingSlug] && (
-        <ProfileEditModal
-          slug={editingSlug}
-          profile={profiles[editingSlug]}
-          presets={presets}
+        <ProfileEditModal slug={editingSlug} profile={profiles[editingSlug]} presets={presets}
           isActive={editingSlug === activeProfile}
           onSave={(p) => handleProfileUpdate(editingSlug, p)}
           onDelete={() => handleDelete(editingSlug)}
-          onClose={() => setEditingSlug(null)}
-        />
+          onClose={() => setEditingSlug(null)} />
       )}
-
-      {/* Create Modal */}
-      {showCreate && (
-        <ProfileCreateModal
-          presets={presets}
-          onSave={handleCreateSave}
-          onClose={() => setShowCreate(false)}
-        />
-      )}
+      {showCreate && <ProfileCreateModal presets={presets} onSave={handleCreateSave} onClose={() => setShowCreate(false)} />}
     </div>
   )
 }
@@ -154,9 +109,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto p-4">
-          {children}
-        </div>
+        <div className="flex-1 overflow-y-auto p-4">{children}</div>
       </div>
     </div>
   )
@@ -165,47 +118,22 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 // ==================== Edit Modal ====================
 
 function ProfileEditModal({ slug, profile, presets, isActive, onSave, onDelete, onClose }: {
-  slug: string
-  profile: Profile
-  presets: Preset[]
-  isActive: boolean
-  onSave: (profile: Profile) => Promise<void>
-  onDelete: () => void
-  onClose: () => void
+  slug: string; profile: Profile; presets: Preset[]; isActive: boolean
+  onSave: (profile: Profile) => Promise<void>; onDelete: () => void; onClose: () => void
 }) {
-  const preset = presets.find(p =>
-    p.backend.value === profile.backend
-    && (!p.loginMethod || p.loginMethod.value === profile.loginMethod)
-    && (!p.provider || p.provider.value === profile.provider)
-  ) ?? presets.find(p => p.category === 'custom')!
-
-  const isPresetModel = preset.models.some(m => m.id === profile.model)
-  const [label, setLabel] = useState(profile.label)
-  const [model, setModel] = useState(isPresetModel ? profile.model : (profile.model ? '__custom__' : ''))
-  const [customModel, setCustomModel] = useState(isPresetModel ? '' : profile.model)
-  const [loginMethod, setLoginMethod] = useState(profile.loginMethod ?? '')
-  const [provider, setProvider] = useState(profile.provider ?? '')
-  const [baseUrl, setBaseUrl] = useState(profile.baseUrl ?? '')
-  const [apiKey, setApiKey] = useState('')
+  const preset = findPresetForProfile(profile, presets)
+  const [formData, setFormData] = useState<Record<string, string>>(() => profileToFormData(profile))
   const [status, setStatus] = useState<SaveStatus>('idle')
   const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  useEffect(() => { setFormData(profileToFormData(profile)); setStatus('idle') }, [slug, profile])
   useEffect(() => () => { if (savedTimer.current) clearTimeout(savedTimer.current) }, [])
-
-  const effectiveModel = model === '__custom__' ? customModel : model
 
   const handleSave = async () => {
     setStatus('saving')
     try {
-      await onSave({
-        backend: profile.backend,
-        label: label.trim() || profile.label,
-        model: effectiveModel,
-        ...(loginMethod ? { loginMethod } : {}),
-        ...(provider ? { provider } : {}),
-        ...(baseUrl ? { baseUrl } : {}),
-        ...(apiKey ? { apiKey } : profile.apiKey ? { apiKey: profile.apiKey } : {}),
-      })
+      const merged = mergeFormWithConsts(formData, preset?.schema)
+      await onSave(merged as unknown as Profile)
       setStatus('saved')
       if (savedTimer.current) clearTimeout(savedTimer.current)
       savedTimer.current = setTimeout(() => { setStatus('idle'); onClose() }, 1000)
@@ -215,18 +143,8 @@ function ProfileEditModal({ slug, profile, presets, isActive, onSave, onDelete, 
   return (
     <Modal title={`Edit: ${profile.label}`} onClose={onClose}>
       <div className="space-y-3">
-        <Field label="Profile Name">
-          <input className={inputClass} value={label} onChange={(e) => setLabel(e.target.value)} />
-        </Field>
-        <PresetFields
-          preset={preset}
-          model={model} setModel={setModel} customModel={customModel} setCustomModel={setCustomModel}
-          loginMethod={loginMethod} setLoginMethod={setLoginMethod}
-          provider={provider} setProvider={setProvider}
-          baseUrl={baseUrl} setBaseUrl={setBaseUrl}
-          apiKey={apiKey} setApiKey={setApiKey}
-          existingApiKey={!!profile.apiKey}
-        />
+        {preset?.hint && <p className="text-[11px] text-text-muted bg-bg-tertiary rounded-lg p-3 leading-relaxed">{preset.hint}</p>}
+        <SchemaForm schema={preset?.schema} formData={formData} onChange={setFormData} existingProfile={profile} />
         <div className="flex items-center gap-2 pt-2 border-t border-border mt-4">
           <button onClick={handleSave} className="btn-primary">Save</button>
           <SaveIndicator status={status} onRetry={handleSave} />
@@ -241,53 +159,37 @@ function ProfileEditModal({ slug, profile, presets, isActive, onSave, onDelete, 
 // ==================== Create Modal ====================
 
 function ProfileCreateModal({ presets, onSave, onClose }: {
-  presets: Preset[]
-  onSave: (slug: string, profile: Profile) => Promise<void>
-  onClose: () => void
+  presets: Preset[]; onSave: (slug: string, profile: Profile) => Promise<void>; onClose: () => void
 }) {
   const [selectedPreset, setSelectedPreset] = useState<Preset | null>(null)
-  const [label, setLabel] = useState('')
-  const [model, setModel] = useState('')
-  const [customModel, setCustomModel] = useState('')
-  const [loginMethod, setLoginMethod] = useState('')
-  const [provider, setProvider] = useState('')
-  const [baseUrl, setBaseUrl] = useState('')
-  const [apiKey, setApiKey] = useState('')
+  const [formData, setFormData] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
   const selectPreset = (preset: Preset) => {
     setSelectedPreset(preset)
-    setLabel('')
-    setModel(preset.defaultModel ?? '')
-    setCustomModel('')
-    setLoginMethod(preset.loginMethod?.value ?? '')
-    setProvider(preset.provider?.value ?? '')
-    setBaseUrl(preset.baseUrl?.value ?? '')
-    setApiKey('')
+    setFormData(extractDefaults(preset.schema))
     setError('')
   }
 
-  const effectiveModel = model === '__custom__' ? customModel : model
-
   const handleCreate = async () => {
-    if (!selectedPreset || !label.trim()) { setError('Profile name is required'); return }
-    if (!selectedPreset.modelOptional && !effectiveModel) { setError('Model is required'); return }
-    if (selectedPreset.apiKey?.required && !apiKey) { setError('API key is required'); return }
-    setSaving(true)
-    setError('')
-    const slug = label.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-    if (!slug) { setError('Invalid name for slug'); setSaving(false); return }
+    if (!selectedPreset) return
+    const label = formData.label?.trim()
+    if (!label) { setError('Profile name is required'); return }
+    // Check required fields
+    const required = (selectedPreset.schema.required as string[] | undefined) ?? []
+    for (const field of required) {
+      if (field === 'label') continue
+      const prop = (selectedPreset.schema.properties as Record<string, JsonSchemaProperty>)?.[field]
+      if (prop?.const !== undefined) continue // const fields are auto-filled
+      if (!formData[field]?.trim()) { setError(`${prop?.title ?? field} is required`); return }
+    }
+    setSaving(true); setError('')
+    const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+    if (!slug) { setError('Invalid name'); setSaving(false); return }
     try {
-      await onSave(slug, {
-        backend: selectedPreset.backend.value,
-        label: label.trim(),
-        model: effectiveModel,
-        ...(loginMethod ? { loginMethod } : {}),
-        ...(provider ? { provider } : {}),
-        ...(baseUrl ? { baseUrl } : {}),
-        ...(apiKey ? { apiKey } : {}),
-      })
+      const merged = mergeFormWithConsts(formData, selectedPreset.schema)
+      await onSave(slug, merged as unknown as Profile)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create')
     } finally { setSaving(false) }
@@ -300,16 +202,14 @@ function ProfileCreateModal({ presets, onSave, onClose }: {
   return (
     <Modal title={selectedPreset ? `New: ${selectedPreset.label}` : 'New Profile'} onClose={onClose}>
       {!selectedPreset ? (
-        /* Step 1: Choose Preset */
         <div className="space-y-4">
           {officialPresets.length > 0 && (
             <div>
               <p className="text-[11px] font-medium text-text-muted mb-2 uppercase tracking-wider">Official</p>
               <div className="grid grid-cols-2 gap-2">
                 {officialPresets.map((p) => (
-                  <button key={p.id} onClick={() => selectPreset(p)}
-                    className="flex items-start gap-2.5 p-3 rounded-lg border border-border bg-bg hover:bg-bg-tertiary hover:border-accent/40 transition-all text-left">
-                    <div className="text-text-muted mt-0.5">{BACKEND_ICONS[p.backend.value]}</div>
+                  <button key={p.id} onClick={() => selectPreset(p)} className="flex items-start gap-2.5 p-3 rounded-lg border border-border bg-bg hover:bg-bg-tertiary hover:border-accent/40 transition-all text-left">
+                    <div className="text-text-muted mt-0.5">{BACKEND_ICONS[getSchemaConst(p.schema, 'backend') as AIBackend ?? 'vercel-ai-sdk']}</div>
                     <div>
                       <p className="text-[12px] font-medium text-text">{p.label}</p>
                       <p className="text-[10px] text-text-muted mt-0.5 leading-snug">{p.description}</p>
@@ -324,9 +224,8 @@ function ProfileCreateModal({ presets, onSave, onClose }: {
               <p className="text-[11px] font-medium text-text-muted mb-2 uppercase tracking-wider">Third Party</p>
               <div className="grid grid-cols-2 gap-2">
                 {thirdPartyPresets.map((p) => (
-                  <button key={p.id} onClick={() => selectPreset(p)}
-                    className="flex items-start gap-2.5 p-3 rounded-lg border border-border bg-bg hover:bg-bg-tertiary hover:border-accent/40 transition-all text-left">
-                    <div className="text-text-muted mt-0.5">{BACKEND_ICONS[p.backend.value]}</div>
+                  <button key={p.id} onClick={() => selectPreset(p)} className="flex items-start gap-2.5 p-3 rounded-lg border border-border bg-bg hover:bg-bg-tertiary hover:border-accent/40 transition-all text-left">
+                    <div className="text-text-muted mt-0.5">{BACKEND_ICONS[getSchemaConst(p.schema, 'backend') as AIBackend ?? 'vercel-ai-sdk']}</div>
                     <div>
                       <p className="text-[12px] font-medium text-text">{p.label}</p>
                       <p className="text-[10px] text-text-muted mt-0.5 leading-snug">{p.description}</p>
@@ -337,27 +236,16 @@ function ProfileCreateModal({ presets, onSave, onClose }: {
             </div>
           )}
           {customPreset && (
-            <button onClick={() => selectPreset(customPreset)}
-              className="w-full p-3 rounded-lg border border-dashed border-border hover:border-accent/40 hover:bg-bg-tertiary transition-all text-left">
+            <button onClick={() => selectPreset(customPreset)} className="w-full p-3 rounded-lg border border-dashed border-border hover:border-accent/40 hover:bg-bg-tertiary transition-all text-left">
               <p className="text-[12px] font-medium text-text">+ Custom</p>
               <p className="text-[10px] text-text-muted mt-0.5">{customPreset.description}</p>
             </button>
           )}
         </div>
       ) : (
-        /* Step 2: Fill Fields */
         <div className="space-y-3">
-          <Field label="Profile Name">
-            <input className={inputClass} value={label} onChange={(e) => setLabel(e.target.value)} placeholder={`e.g. My ${selectedPreset.label}`} autoFocus />
-          </Field>
-          <PresetFields
-            preset={selectedPreset}
-            model={model} setModel={setModel} customModel={customModel} setCustomModel={setCustomModel}
-            loginMethod={loginMethod} setLoginMethod={setLoginMethod}
-            provider={provider} setProvider={setProvider}
-            baseUrl={baseUrl} setBaseUrl={setBaseUrl}
-            apiKey={apiKey} setApiKey={setApiKey}
-          />
+          {selectedPreset.hint && <p className="text-[11px] text-text-muted bg-bg-tertiary rounded-lg p-3 leading-relaxed">{selectedPreset.hint}</p>}
+          <SchemaForm schema={selectedPreset.schema} formData={formData} onChange={setFormData} />
           {error && <p className="text-[12px] text-red">{error}</p>}
           <div className="flex items-center gap-2 pt-2 border-t border-border mt-4">
             <button onClick={handleCreate} disabled={saving} className="btn-primary">{saving ? 'Creating...' : 'Create'}</button>
@@ -369,85 +257,141 @@ function ProfileCreateModal({ presets, onSave, onClose }: {
   )
 }
 
-// ==================== Preset-aware Fields ====================
+// ==================== Schema-driven Form Renderer ====================
 
-function PresetFields({ preset, model, setModel, customModel, setCustomModel, loginMethod, setLoginMethod, provider, setProvider, baseUrl, setBaseUrl, apiKey, setApiKey, existingApiKey }: {
-  preset: Preset
-  model: string; setModel: (v: string) => void
-  customModel: string; setCustomModel: (v: string) => void
-  loginMethod: string; setLoginMethod: (v: string) => void
-  provider: string; setProvider: (v: string) => void
-  baseUrl: string; setBaseUrl: (v: string) => void
-  apiKey: string; setApiKey: (v: string) => void
-  existingApiKey?: boolean
+function SchemaForm({ schema, formData, onChange, existingProfile }: {
+  schema?: Preset['schema']
+  formData: Record<string, string>
+  onChange: (data: Record<string, string>) => void
+  existingProfile?: Profile
 }) {
-  const f = preset
+  if (!schema?.properties) return null
+  const props = schema.properties as Record<string, JsonSchemaProperty>
+  const required = new Set(schema.required as string[] ?? [])
+
+  const setField = (key: string, value: string) => {
+    onChange({ ...formData, [key]: value })
+  }
+
   return (
     <>
-      {f.loginMethod && !f.loginMethod.hidden && (
-        <Field label="Authentication">
-          {f.loginMethod.locked ? (
-            <p className="text-[13px] text-text-muted">{f.loginMethod.value}</p>
-          ) : (
-            <select className={inputClass} value={loginMethod} onChange={(e) => setLoginMethod(e.target.value)}>
-              <option value="claudeai">Claude Pro/Max (subscription)</option>
-              <option value="codex-oauth">ChatGPT Subscription</option>
-              <option value="api-key">API Key</option>
-            </select>
-          )}
-        </Field>
-      )}
-      {f.provider && !f.provider.hidden && (
-        <Field label="SDK Provider">
-          {f.provider.locked ? (
-            <p className="text-[13px] text-text-muted">{f.provider.value}</p>
-          ) : (
-            <select className={inputClass} value={provider} onChange={(e) => setProvider(e.target.value)}>
-              <option value="anthropic">Anthropic</option>
-              <option value="openai">OpenAI</option>
-              <option value="google">Google</option>
-            </select>
-          )}
-        </Field>
-      )}
-      <Field label={f.modelOptional ? 'Model (optional)' : 'Model'}>
-        {f.models.length > 0 ? (
-          <>
-            <select className={inputClass} value={model} onChange={(e) => { setModel(e.target.value); if (e.target.value !== '__custom__') setCustomModel('') }}>
-              {f.modelOptional && <option value="">Auto (based on subscription plan)</option>}
-              {f.models.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-              <option value="__custom__">Custom...</option>
-            </select>
-            {model === '__custom__' && (
-              <input className={`${inputClass} mt-2`} value={customModel} onChange={(e) => setCustomModel(e.target.value)} placeholder="Enter model ID" />
-            )}
-          </>
-        ) : (
-          <input className={inputClass} value={customModel || model}
-            onChange={(e) => { setModel(e.target.value); setCustomModel(e.target.value) }}
-            placeholder={f.modelOptional ? 'Leave empty for auto' : 'e.g. claude-sonnet-4-6, gpt-5.4'} />
-        )}
-      </Field>
-      {f.baseUrl && !f.baseUrl.hidden && (
-        <Field label="Base URL" description={f.baseUrl.locked ? undefined : 'Leave empty for official API.'}>
-          {f.baseUrl.locked ? (
-            <p className="text-[13px] text-text-muted font-mono">{f.baseUrl.value}</p>
-          ) : (
-            <input className={inputClass} value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="Leave empty for default" />
-          )}
-        </Field>
-      )}
-      {f.apiKey && !f.apiKey.hidden && !f.apiKey.locked && (
-        <Field label={f.apiKey.required ? 'API Key (required)' : 'API Key (optional)'}>
-          <div className="relative">
-            <input className={inputClass} type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)}
-              placeholder={existingApiKey ? '(configured — leave empty to keep)' : 'Enter API key'} />
-            {existingApiKey && !apiKey && (
-              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-green">active</span>
-            )}
-          </div>
-        </Field>
-      )}
+      {Object.entries(props).map(([key, prop]) => {
+        // const → hidden, value baked in
+        if (prop.const !== undefined) return null
+
+        const isRequired = required.has(key)
+        const isPassword = !!prop.writeOnly
+        const title = prop.title ?? key.charAt(0).toUpperCase() + key.slice(1)
+        const label = isRequired ? title : `${title} (optional)`
+        const value = formData[key] ?? ''
+        const hasExisting = existingProfile && key === 'apiKey' && !!(existingProfile as unknown as Record<string, unknown>)[key]
+
+        // oneOf → dropdown with labels
+        if (prop.oneOf) {
+          const showCustom = value === '__custom__'
+          return (
+            <Field key={key} label={label} description={prop.description}>
+              <select className={inputClass} value={prop.oneOf.some(o => o.const === value) ? value : (value ? '__custom__' : '')}
+                onChange={(e) => { setField(key, e.target.value === '__custom__' ? '' : e.target.value) }}>
+                {prop.oneOf.map((opt) => <option key={opt.const} value={opt.const}>{opt.title}</option>)}
+                <option value="__custom__">Custom...</option>
+              </select>
+              {showCustom && <input className={`${inputClass} mt-2`} value={formData[`${key}__custom`] ?? ''} onChange={(e) => { onChange({ ...formData, [key]: e.target.value, [`${key}__custom`]: e.target.value }) }} placeholder="Enter custom value" />}
+            </Field>
+          )
+        }
+
+        // enum → simple dropdown (no labels)
+        if (prop.enum) {
+          return (
+            <Field key={key} label={label} description={prop.description}>
+              <select className={inputClass} value={value} onChange={(e) => setField(key, e.target.value)}>
+                {prop.enum.map((v) => <option key={v} value={v}>{v}</option>)}
+              </select>
+            </Field>
+          )
+        }
+
+        // password field
+        if (isPassword) {
+          return (
+            <Field key={key} label={label} description={prop.description}>
+              <div className="relative">
+                <input className={inputClass} type="password" value={value} onChange={(e) => setField(key, e.target.value)}
+                  placeholder={hasExisting ? '(configured — leave empty to keep)' : 'Enter value'} />
+                {hasExisting && !value && <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-green">active</span>}
+              </div>
+            </Field>
+          )
+        }
+
+        // default: text input
+        return (
+          <Field key={key} label={label} description={prop.description}>
+            <input className={inputClass} value={value} onChange={(e) => setField(key, e.target.value)} placeholder={prop.default !== undefined ? String(prop.default) : ''} />
+          </Field>
+        )
+      })}
     </>
   )
+}
+
+// ==================== Helpers ====================
+
+/** Extract const value from a schema property. */
+function getSchemaConst(schema: Preset['schema'], field: string): unknown {
+  const props = schema?.properties as Record<string, JsonSchemaProperty> | undefined
+  return props?.[field]?.const
+}
+
+/** Extract default values from schema. */
+function extractDefaults(schema: Preset['schema']): Record<string, string> {
+  const data: Record<string, string> = {}
+  const props = schema?.properties as Record<string, JsonSchemaProperty> | undefined
+  if (!props) return data
+  for (const [key, prop] of Object.entries(props)) {
+    if (prop.const !== undefined) continue // const fields handled at merge time
+    if (prop.default !== undefined) data[key] = String(prop.default)
+  }
+  return data
+}
+
+/** Merge user form data with const values from schema. */
+function mergeFormWithConsts(formData: Record<string, string>, schema?: Preset['schema']): Record<string, unknown> {
+  const result: Record<string, unknown> = {}
+  const props = schema?.properties as Record<string, JsonSchemaProperty> | undefined
+  if (props) {
+    for (const [key, prop] of Object.entries(props)) {
+      if (prop.const !== undefined) {
+        result[key] = prop.const
+      }
+    }
+  }
+  for (const [key, value] of Object.entries(formData)) {
+    if (key.endsWith('__custom')) continue // internal custom field tracking
+    if (value !== '' && value !== undefined) result[key] = value
+  }
+  return result
+}
+
+/** Convert an existing profile to form data (for editing). */
+function profileToFormData(profile: Profile): Record<string, string> {
+  const data: Record<string, string> = {}
+  for (const [key, value] of Object.entries(profile)) {
+    if (value !== undefined && value !== null) data[key] = String(value)
+  }
+  return data
+}
+
+/** Find the best matching preset for an existing profile. */
+function findPresetForProfile(profile: Profile, presets: Preset[]): Preset | undefined {
+  return presets.find(p => {
+    const props = p.schema?.properties as Record<string, JsonSchemaProperty> | undefined
+    if (!props) return false
+    // Match by const fields (backend, loginMethod, provider, baseUrl)
+    for (const [key, prop] of Object.entries(props)) {
+      if (prop.const !== undefined && (profile as unknown as Record<string, unknown>)[key] !== prop.const) return false
+    }
+    return true
+  }) ?? presets.find(p => p.category === 'custom')
 }

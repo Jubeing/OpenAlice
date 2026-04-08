@@ -14,31 +14,33 @@ export interface Profile {
 
 // ==================== AI Provider Presets ====================
 
-export interface PresetModelOption {
-  id: string
-  label: string
-}
-
-export interface PresetField<T = string> {
-  value: T
-  locked: boolean
-  hidden?: boolean
-  required?: boolean
-}
-
 export interface Preset {
   id: string
   label: string
   description: string
   category: 'official' | 'third-party' | 'custom'
-  backend: PresetField<AIBackend>
-  loginMethod?: PresetField
-  provider?: PresetField
-  baseUrl?: PresetField
-  apiKey?: PresetField
-  models: PresetModelOption[]
-  defaultModel?: string
-  modelOptional?: boolean
+  hint?: string
+  schema: JsonSchema
+}
+
+/** Subset of JSON Schema types we use for form rendering. */
+export interface JsonSchema {
+  type?: string
+  properties?: Record<string, JsonSchemaProperty>
+  required?: string[]
+  [key: string]: unknown
+}
+
+export interface JsonSchemaProperty {
+  type?: string
+  const?: unknown
+  enum?: string[]
+  oneOf?: Array<{ const: string; title: string }>
+  default?: unknown
+  title?: string
+  description?: string
+  writeOnly?: boolean
+  [key: string]: unknown
 }
 
 // ==================== Channels ====================

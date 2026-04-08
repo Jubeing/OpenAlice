@@ -1,69 +1,99 @@
 /**
- * AI Provider Presets — constraint-based templates for profile creation.
+ * AI Provider Presets — schema-driven templates for profile creation.
  *
- * Each preset defines which fields are locked (not user-editable),
- * hidden (not shown in UI), required (must be filled), and what
- * models are available to choose from.
+ * Each preset produces a JSON Schema that tells the frontend exactly
+ * how to render the creation/edit form:
+ *   - const fields → hidden (value baked in)
+ *   - oneOf fields → dropdown with labels
+ *   - writeOnly fields → password input
+ *   - required / default / description → form behavior
  *
- * Presets are NOT profiles — they are templates that guide profile
- * creation. Users create concrete profiles from presets.
+ * Frontend is a pure renderer — no field logic, no hardcoded options.
  */
 
+import { z } from 'zod'
 import type { AIBackend } from '../core/config.js'
 
-// ==================== Types ====================
+// ==================== Serialized Preset (sent to frontend) ====================
 
-export interface PresetModelOption {
-  /** Model ID as sent to the API (e.g. 'claude-sonnet-4-6'). */
-  id: string
-  /** Human-readable label (e.g. 'Claude Sonnet 4.6'). */
-  label: string
-}
-
-export interface PresetField<T = string> {
-  /** The preset value for this field. */
-  value: T
-  /** If true, user cannot edit this field — it's baked into the preset. */
-  locked: boolean
-  /** If true, field is not displayed in the UI (but its value is still used). */
-  hidden?: boolean
-  /** If true, user must provide a value for this field (e.g. API key). */
-  required?: boolean
-}
-
-export interface Preset {
+export interface SerializedPreset {
   id: string
   label: string
   description: string
   category: 'official' | 'third-party' | 'custom'
-
-  // Field constraints (undefined = field not applicable to this preset)
-  backend: PresetField<AIBackend>
-  loginMethod?: PresetField
-  provider?: PresetField
-  baseUrl?: PresetField
-  apiKey?: PresetField
-
-  // Model selection
-  models: PresetModelOption[]
-  /** Default model ID to pre-select. */
-  defaultModel?: string
-  /** If true, model can be left empty (OAuth mode — server picks based on plan). */
-  modelOptional?: boolean
+  hint?: string
+  schema: Record<string, unknown>
 }
 
-// ==================== Built-in Presets ====================
+// ==================== Model option with label ====================
 
-export const BUILTIN_PRESETS: Preset[] = [
+interface ModelOption {
+  id: string
+  label: string
+}
+
+// ==================== Internal preset definition ====================
+
+interface PresetDef {
+  id: string
+  label: string
+  description: string
+  category: 'official' | 'third-party' | 'custom'
+  hint?: string
+  zodSchema: z.ZodType
+  /** Models with human-readable labels. Post-processed into oneOf. */
+  models?: ModelOption[]
+  /** Property name for the model field (default: 'model'). */
+  modelField?: string
+  /** If true, model can be left empty. */
+  modelOptional?: boolean
+  /** Properties that should be rendered as password fields. */
+  writeOnlyFields?: string[]
+}
+
+// ==================== Schema post-processing ====================
+
+/** Convert a Zod schema to JSON Schema, then apply preset-specific transforms. */
+function buildJsonSchema(def: PresetDef): Record<string, unknown> {
+  const raw = z.toJSONSchema(def.zodSchema) as Record<string, unknown>
+  const props = (raw.properties ?? {}) as Record<string, Record<string, unknown>>
+
+  // Inject oneOf for model field (replace plain enum with labeled options)
+  const mf = def.modelField ?? 'model'
+  if (def.models?.length && props[mf]) {
+    const oneOf = def.models.map(m => ({ const: m.id, title: m.label }))
+    if (def.modelOptional) {
+      oneOf.unshift({ const: '', title: 'Auto (based on subscription plan)' })
+    }
+    const { enum: _e, ...rest } = props[mf]
+    props[mf] = { ...rest, oneOf }
+  }
+
+  // Mark writeOnly fields (rendered as password inputs)
+  for (const field of def.writeOnlyFields ?? []) {
+    if (props[field]) props[field].writeOnly = true
+  }
+
+  raw.properties = props
+  return raw
+}
+
+// ==================== Preset definitions ====================
+
+const PRESET_DEFS: PresetDef[] = [
   // ── Official: Claude ──
   {
     id: 'claude-oauth',
     label: 'Claude (Subscription)',
     description: 'Use your Claude Pro/Max subscription',
     category: 'official',
-    backend: { value: 'agent-sdk', locked: true, hidden: true },
-    loginMethod: { value: 'claudeai', locked: true, hidden: true },
-    apiKey: { value: '', locked: true, hidden: true },
+    hint: 'Requires Claude Code CLI login. Run `claude login` in your terminal first.',
+    zodSchema: z.object({
+      label: z.string().min(1).describe('Profile name'),
+      backend: z.literal('agent-sdk' as const),
+      loginMethod: z.literal('claudeai' as const),
+      model: z.string().optional().default('').describe('Leave empty to auto-select based on your plan'),
+    }),
     models: [
       { id: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
       { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
@@ -75,15 +105,19 @@ export const BUILTIN_PRESETS: Preset[] = [
     label: 'Claude (API Key)',
     description: 'Pay per token via Anthropic API',
     category: 'official',
-    backend: { value: 'agent-sdk', locked: true, hidden: true },
-    loginMethod: { value: 'api-key', locked: true, hidden: true },
-    apiKey: { value: '', locked: false, required: true },
+    zodSchema: z.object({
+      label: z.string().min(1).describe('Profile name'),
+      backend: z.literal('agent-sdk' as const),
+      loginMethod: z.literal('api-key' as const),
+      model: z.string().default('claude-sonnet-4-6').describe('Model'),
+      apiKey: z.string().min(1).describe('Anthropic API key'),
+    }),
     models: [
       { id: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
       { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
       { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
     ],
-    defaultModel: 'claude-sonnet-4-6',
+    writeOnlyFields: ['apiKey'],
   },
 
   // ── Official: OpenAI / Codex ──
@@ -92,29 +126,36 @@ export const BUILTIN_PRESETS: Preset[] = [
     label: 'OpenAI / Codex (Subscription)',
     description: 'Use your ChatGPT subscription',
     category: 'official',
-    backend: { value: 'codex', locked: true, hidden: true },
-    loginMethod: { value: 'codex-oauth', locked: true, hidden: true },
-    apiKey: { value: '', locked: true, hidden: true },
+    hint: 'Requires Codex CLI login. Run `codex login` in your terminal first.',
+    zodSchema: z.object({
+      label: z.string().min(1).describe('Profile name'),
+      backend: z.literal('codex' as const),
+      loginMethod: z.literal('codex-oauth' as const),
+      model: z.string().optional().default('gpt-5.4').describe('Leave empty to auto-select'),
+    }),
     models: [
       { id: 'gpt-5.4', label: 'GPT 5.4' },
       { id: 'gpt-5.4-mini', label: 'GPT 5.4 Mini' },
     ],
     modelOptional: true,
-    defaultModel: 'gpt-5.4',
   },
   {
     id: 'codex-api',
     label: 'OpenAI (API Key)',
     description: 'Pay per token via OpenAI API',
     category: 'official',
-    backend: { value: 'codex', locked: true, hidden: true },
-    loginMethod: { value: 'api-key', locked: true, hidden: true },
-    apiKey: { value: '', locked: false, required: true },
+    zodSchema: z.object({
+      label: z.string().min(1).describe('Profile name'),
+      backend: z.literal('codex' as const),
+      loginMethod: z.literal('api-key' as const),
+      model: z.string().default('gpt-5.4').describe('Model'),
+      apiKey: z.string().min(1).describe('OpenAI API key'),
+    }),
     models: [
       { id: 'gpt-5.4', label: 'GPT 5.4' },
       { id: 'gpt-5.4-mini', label: 'GPT 5.4 Mini' },
     ],
-    defaultModel: 'gpt-5.4',
+    writeOnlyFields: ['apiKey'],
   },
 
   // ── Official: Gemini ──
@@ -123,14 +164,18 @@ export const BUILTIN_PRESETS: Preset[] = [
     label: 'Google Gemini',
     description: 'Google AI via API key',
     category: 'official',
-    backend: { value: 'vercel-ai-sdk', locked: true, hidden: true },
-    provider: { value: 'google', locked: true, hidden: true },
-    apiKey: { value: '', locked: false, required: true },
+    zodSchema: z.object({
+      label: z.string().min(1).describe('Profile name'),
+      backend: z.literal('vercel-ai-sdk' as const),
+      provider: z.literal('google' as const),
+      model: z.string().default('gemini-2.5-flash').describe('Model'),
+      apiKey: z.string().min(1).describe('Google AI API key'),
+    }),
     models: [
       { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
       { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
     ],
-    defaultModel: 'gemini-2.5-flash',
+    writeOnlyFields: ['apiKey'],
   },
 
   // ── Third-party: MiniMax ──
@@ -139,14 +184,19 @@ export const BUILTIN_PRESETS: Preset[] = [
     label: 'MiniMax',
     description: 'MiniMax models via Anthropic-compatible API',
     category: 'third-party',
-    backend: { value: 'vercel-ai-sdk', locked: true, hidden: true },
-    provider: { value: 'anthropic', locked: true, hidden: true },
-    baseUrl: { value: 'https://api.minimaxi.com/anthropic', locked: true },
-    apiKey: { value: '', locked: false, required: true },
+    hint: 'Get your API key at minimaxi.com',
+    zodSchema: z.object({
+      label: z.string().min(1).describe('Profile name'),
+      backend: z.literal('vercel-ai-sdk' as const),
+      provider: z.literal('anthropic' as const),
+      baseUrl: z.literal('https://api.minimaxi.com/anthropic').describe('MiniMax API endpoint'),
+      model: z.string().default('MiniMax-M2.7').describe('Model'),
+      apiKey: z.string().min(1).describe('MiniMax API key'),
+    }),
     models: [
       { id: 'MiniMax-M2.7', label: 'MiniMax M2.7' },
     ],
-    defaultModel: 'MiniMax-M2.7',
+    writeOnlyFields: ['apiKey'],
   },
 
   // ── Custom ──
@@ -155,11 +205,26 @@ export const BUILTIN_PRESETS: Preset[] = [
     label: 'Custom',
     description: 'Full control — any provider, model, and endpoint',
     category: 'custom',
-    backend: { value: 'vercel-ai-sdk', locked: false },
-    provider: { value: 'openai', locked: false },
-    loginMethod: { value: 'api-key', locked: false },
-    baseUrl: { value: '', locked: false },
-    apiKey: { value: '', locked: false },
-    models: [],
+    zodSchema: z.object({
+      label: z.string().min(1).describe('Profile name'),
+      backend: z.enum(['agent-sdk', 'codex', 'vercel-ai-sdk']).default('vercel-ai-sdk').describe('Backend engine'),
+      provider: z.string().optional().default('openai').describe('SDK provider (for Vercel AI SDK)'),
+      loginMethod: z.string().optional().default('api-key').describe('Authentication method'),
+      model: z.string().describe('Model ID'),
+      baseUrl: z.string().optional().describe('Custom API endpoint (leave empty for official)'),
+      apiKey: z.string().optional().describe('API key'),
+    }),
+    writeOnlyFields: ['apiKey'],
   },
 ]
+
+// ==================== Exported: serialized presets ====================
+
+export const BUILTIN_PRESETS: SerializedPreset[] = PRESET_DEFS.map(def => ({
+  id: def.id,
+  label: def.label,
+  description: def.description,
+  category: def.category,
+  hint: def.hint,
+  schema: buildJsonSchema(def),
+}))
